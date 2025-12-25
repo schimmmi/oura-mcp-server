@@ -1,0 +1,81 @@
+oura:
+  api:
+    base_url: "https://api.ouraring.com"
+    access_token: "${OURA_ACCESS_TOKEN}"
+    rate_limit:
+      requests_per_minute: 60
+      requests_per_day: 5000
+    timeout_seconds: 30
+  
+  cache:
+    enabled: true
+    ttl_seconds: 3600
+    persistent: false
+    backend: "memory"  # memory | redis
+  
+  baselines:
+    calculation_period_days: 30
+    update_frequency: "daily"
+    metrics:
+      - "hrv"
+      - "resting_hr"
+      - "temperature"
+      - "sleep_score"
+      - "readiness_score"
+  
+  security:
+    access_level: "full"  # summary | standard | full
+    audit_logging: true
+    audit_retention_days: 90
+
+mcp:
+  server:
+    name: "Oura Health MCP"
+    version: "0.1.0"
+    transport: "stdio"  # stdio | http
+    http_port: 8080  # only used if transport is http
+  
+  resources:
+    enabled:
+      - "sleep"
+      - "readiness"
+      - "activity"
+      - "hrv"
+      - "metrics"
+    
+    # Resource-specific settings
+    sleep:
+      default_period: "today"
+      max_days: 90
+    
+    readiness:
+      include_factors: true
+    
+    hrv:
+      show_baseline: true
+      trend_days: 7
+  
+  tools:
+    enabled:
+      - "analyze_sleep_trend"
+      - "detect_recovery_status"
+      - "generate_daily_brief"
+      - "assess_training_readiness"
+      - "explain_metric_change"
+      - "correlate_metrics"
+      - "detect_anomalies"
+    
+    # Tool-specific settings
+    analyze_sleep_trend:
+      default_days: 7
+      max_days: 90
+    
+    detect_anomalies:
+      default_threshold_std_dev: 1.5
+      min_data_points: 7
+
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+  format: "json"  # json | text
+  output: "stdout"  # stdout | file
+  file_path: "./logs/oura_mcp.log"

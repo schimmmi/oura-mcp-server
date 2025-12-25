@@ -1,0 +1,26 @@
+# MCP Server Framework
+mcp>=1.0.0
+
+# HTTP Client
+httpx>=0.27.0
+
+# Configuration
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Data Processing
+pydantic>=2.0.0
+python-dateutil>=2.8.2
+
+# Development
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+mypy>=1.8.0
+ruff>=0.1.0
+
+# Optional: Enhanced caching
+redis>=5.0.0
+
+# Optional: Database for audit logs
+sqlalchemy>=2.0.0
