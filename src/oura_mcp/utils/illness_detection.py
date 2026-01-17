@@ -57,10 +57,10 @@ class IllnessDetector:
 
     # Signal thresholds
     THRESHOLDS = {
-        'temperature_deviation': {
-            'elevated': 0.3,   # °C above baseline
-            'high': 0.5,
-            'critical': 0.8
+        'temperature_score_drop': {
+            'elevated': -10,   # points below baseline
+            'high': -20,
+            'critical': -30
         },
         'hrv_drop': {
             'elevated': -15,   # % below baseline
@@ -246,11 +246,11 @@ class IllnessDetector:
         recent_data: List[Dict],
         baselines: Dict
     ) -> Optional[IllnessSignal]:
-        """Check for elevated body temperature."""
+        """Check for drop in body temperature score (low score = high temp/illness)."""
         if 'temperature' not in baselines:
             return None
 
-        # Get recent temperature deviations
+        # Get recent temperature scores (Oura gives 0-100 score, lower = more deviation)
         recent_temps = []
         for day in recent_data:
             contributors = day.get('contributors', {})
@@ -265,15 +265,15 @@ class IllnessDetector:
         baseline = baselines['temperature']
         deviation = avg_recent - baseline
 
-        # Check thresholds
-        thresholds = self.THRESHOLDS['temperature_deviation']
+        # Check thresholds (NEGATIVE deviation = problem, score DROP indicates fever)
+        thresholds = self.THRESHOLDS['temperature_score_drop']
         severity = 0
 
-        if deviation >= thresholds['critical']:
+        if deviation <= thresholds['critical']:
             severity = 1.0
-        elif deviation >= thresholds['high']:
+        elif deviation <= thresholds['high']:
             severity = 0.7
-        elif deviation >= thresholds['elevated']:
+        elif deviation <= thresholds['elevated']:
             severity = 0.4
 
         if severity > 0:
@@ -283,7 +283,7 @@ class IllnessDetector:
                 value=avg_recent,
                 baseline=baseline,
                 deviation=deviation,
-                message=f"Body temp {deviation:+.2f}°C above baseline"
+                message=f"Body temp score {deviation:.0f} points below baseline (elevated temperature detected)"
             )
 
         return None
@@ -641,7 +641,7 @@ class IllnessDetector:
             ])
             baselines = detection['baselines']
             if 'temperature' in baselines:
-                lines.append(f"- Body Temperature: {baselines['temperature']:.2f}°C deviation")
+                lines.append(f"- Body Temperature Score: {baselines['temperature']:.0f}/100")
             if 'hrv' in baselines:
                 lines.append(f"- HRV Balance: {baselines['hrv']:.0f}")
             if 'resting_hr' in baselines:
