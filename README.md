@@ -113,7 +113,12 @@ Add to your Claude config (`~/Library/Application Support/Claude/claude_desktop_
 - "What's my readiness score today?"
 - "Give me my daily health brief"
 
-**Intelligence & Analysis (NEW in Phase 2):**
+**Detailed Sleep Sessions (NEW in v0.2.1):**
+- "Show me my sleep sessions for the last 3 days"
+- "Get my detailed sleep periods including naps"
+- "What were my exact sleep times last night?"
+
+**Intelligence & Analysis (Phase 2):**
 - "Am I recovered enough for a hard workout today?"
 - "Assess my readiness for high-intensity training"
 - "What's my HRV trend over the last week?"

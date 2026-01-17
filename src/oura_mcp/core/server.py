@@ -286,6 +286,22 @@ class OuraMCPServer:
                 }
             ))
 
+            # Add detailed sleep sessions tool
+            tools.append(types.Tool(
+                name="get_sleep_sessions",
+                description="Get detailed sleep sessions with exact times and durations (includes all sleep periods like naps, couch sleep, etc.)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 3
+                        }
+                    }
+                }
+            ))
+
             return tools
         
         @self.server.call_tool()
@@ -328,6 +344,11 @@ class OuraMCPServer:
                     metric_type = arguments.get("metric_type", "sleep")
                     days = arguments.get("days", 7)
                     result = await self._tool_detect_anomalies(metric_type, days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_sleep_sessions":
+                    days = arguments.get("days", 3)
+                    result = await self._tool_get_sleep_sessions(days)
                     return [types.TextContent(type="text", text=result)]
 
                 else:
@@ -561,6 +582,90 @@ class OuraMCPServer:
         for record in data:
             result += f"## Date: {record.get('day')}\n"
             result += f"```json\n{json.dumps(record, indent=2)}\n```\n\n"
+
+        return result
+
+    async def _tool_get_sleep_sessions(self, days: int) -> str:
+        """Get detailed sleep sessions with exact times and durations."""
+        from datetime import datetime
+
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get all sleep sessions (including naps, multiple periods)
+        sessions = await self.oura_client.get_sleep(start_date, end_date)
+
+        if not sessions:
+            return f"No sleep sessions available for the last {days} days"
+
+        result = f"# 🛏️ Detailed Sleep Sessions (Last {days} days)\n\n"
+        result += f"**Retrieved {len(sessions)} sleep periods**\n\n"
+
+        # Group sessions by day
+        sessions_by_day = {}
+        for session in sessions:
+            day = session.get("day")
+            if day not in sessions_by_day:
+                sessions_by_day[day] = []
+            sessions_by_day[day].append(session)
+
+        # Format each day's sessions
+        for day in sorted(sessions_by_day.keys(), reverse=True):
+            day_sessions = sessions_by_day[day]
+            result += f"## 📅 {day}\n\n"
+
+            if len(day_sessions) > 1:
+                result += f"*{len(day_sessions)} sleep periods recorded (biphasic/polyphasic)*\n\n"
+
+            for idx, session in enumerate(day_sessions, 1):
+                # Parse timestamps
+                bedtime_start = session.get("bedtime_start")
+                bedtime_end = session.get("bedtime_end")
+
+                if bedtime_start:
+                    start_dt = datetime.fromisoformat(bedtime_start.replace('Z', '+00:00'))
+                    start_time = start_dt.strftime("%H:%M")
+                else:
+                    start_time = "N/A"
+
+                if bedtime_end:
+                    end_dt = datetime.fromisoformat(bedtime_end.replace('Z', '+00:00'))
+                    end_time = end_dt.strftime("%H:%M")
+                else:
+                    end_time = "N/A"
+
+                # Session header
+                if len(day_sessions) > 1:
+                    result += f"### Period {idx}: {start_time} → {end_time}\n\n"
+                else:
+                    result += f"### Sleep: {start_time} → {end_time}\n\n"
+
+                # Duration breakdown
+                total_sleep = session.get("total_sleep_duration", 0)
+                deep_sleep = session.get("deep_sleep_duration", 0)
+                rem_sleep = session.get("rem_sleep_duration", 0)
+                light_sleep = session.get("light_sleep_duration", 0)
+                awake_time = session.get("awake_time", 0)
+
+                if total_sleep > 0:
+                    hours = total_sleep // 3600
+                    minutes = (total_sleep % 3600) // 60
+
+                    result += f"**Total Sleep:** {hours}h {minutes}m\n\n"
+                    result += f"- **Deep Sleep:** {deep_sleep // 60}m ({deep_sleep / total_sleep * 100:.1f}%)\n"
+                    result += f"- **REM Sleep:** {rem_sleep // 60}m ({rem_sleep / total_sleep * 100:.1f}%)\n"
+                    result += f"- **Light Sleep:** {light_sleep // 60}m ({light_sleep / total_sleep * 100:.1f}%)\n"
+                    result += f"- **Awake Time:** {awake_time // 60}m\n\n"
+
+                # Additional metrics
+                if session.get("efficiency"):
+                    result += f"**Efficiency:** {session['efficiency']}%\n"
+                if session.get("latency"):
+                    result += f"**Sleep Latency:** {session['latency'] // 60}m\n"
+
+                result += "\n"
+
+            result += "---\n\n"
 
         return result
 

@@ -63,6 +63,58 @@ Example output shows:
 
 ## 🛠️ New Tools
 
+### 0. Detailed Sleep Sessions (v0.2.1)
+
+**Tool:** `get_sleep_sessions`
+
+**Parameters:**
+- `days`: Number of days to retrieve (default: 3)
+
+**What it does:**
+Retrieves all sleep periods with exact start/end times, including:
+- Multiple sleep periods per day (biphasic/polyphasic sleep)
+- Naps and couch sleep
+- Detailed sleep stage breakdowns per period
+- Sleep efficiency and latency metrics
+
+**Ask Claude:**
+- "Show me my sleep sessions for the last 3 days"
+- "What were my exact sleep times last night?"
+- "Get detailed sleep periods including my nap yesterday"
+- "Did I have multiple sleep periods last night?"
+
+**Output includes:**
+- Exact bedtime start and end (e.g., "21:30 → 07:15")
+- Duration breakdown per period:
+  - Deep sleep (minutes and %)
+  - REM sleep (minutes and %)
+  - Light sleep (minutes and %)
+  - Awake time
+- Sleep efficiency percentage
+- Sleep latency (time to fall asleep)
+- Multiple periods clearly labeled when detected
+
+**Example Output:**
+```
+📅 2026-01-16
+
+Period 1: 21:30 → 23:15
+Total Sleep: 1h 35m
+- Deep Sleep: 25m (26.3%)
+- REM Sleep: 30m (31.6%)
+- Light Sleep: 35m (36.8%)
+- Awake Time: 5m
+
+Period 2: 00:15 → 07:30
+Total Sleep: 6h 45m
+- Deep Sleep: 95m (23.5%)
+- REM Sleep: 125m (30.9%)
+- Light Sleep: 175m (43.2%)
+- Awake Time: 10m
+```
+
+---
+
 ### 1. Recovery Status Detection
 
 **Tool:** `detect_recovery_status`
