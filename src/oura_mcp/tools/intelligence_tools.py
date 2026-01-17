@@ -10,6 +10,7 @@ from ..utils.anomalies import AnomalyDetector
 from ..utils.interpretation import InterpretationEngine
 from ..utils.bedtime_calculator import BedtimeCalculator
 from ..utils.alert_system import AlertSystem
+from ..utils.sleep_aggregation import aggregate_sleep_sessions_by_day
 
 
 class IntelligenceToolProvider:
@@ -355,10 +356,13 @@ class IntelligenceToolProvider:
         start_date = end_date - timedelta(days=days)
 
         # Get sleep sessions
-        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
 
-        if not sleep_data:
+        if not sleep_sessions:
             return "⚠️ No sleep data available for analysis"
+
+        # Aggregate biphasic/multiple sleep sessions per day
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
         # Analyze and generate recommendations
         analysis = self.bedtime_calculator.analyze_best_nights(
@@ -382,9 +386,12 @@ class IntelligenceToolProvider:
         start_date = end_date - timedelta(days=lookback_days)
 
         # Get recent data
-        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
         readiness_data = await self.oura_client.get_daily_readiness(start_date, end_date)
         activity_data = await self.oura_client.get_daily_activity(start_date, end_date)
+
+        # Aggregate biphasic/multiple sleep sessions per day
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
         # Check for alerts
         alerts = self.alert_system.check_all_alerts(

@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from ..api.client import OuraClient
 from ..utils.weekly_report import WeeklyReportGenerator
+from ..utils.sleep_aggregation import aggregate_sleep_sessions_by_day
 
 
 class DebugToolProvider:
@@ -139,9 +140,12 @@ class DebugToolProvider:
         week_end = week_start + timedelta(days=6)
 
         # Get data for the week
-        sleep_data = await self.oura_client.get_sleep(week_start, week_end)
+        sleep_sessions = await self.oura_client.get_sleep(week_start, week_end)
         readiness_data = await self.oura_client.get_daily_readiness(week_start, week_end)
         activity_data = await self.oura_client.get_daily_activity(week_start, week_end)
+
+        # Aggregate biphasic/multiple sleep sessions per day
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
         # Get previous week data if requested
         previous_week_data = None
@@ -149,9 +153,12 @@ class DebugToolProvider:
             prev_week_start = week_start - timedelta(days=7)
             prev_week_end = prev_week_start + timedelta(days=6)
 
-            prev_sleep = await self.oura_client.get_sleep(prev_week_start, prev_week_end)
+            prev_sleep_sessions = await self.oura_client.get_sleep(prev_week_start, prev_week_end)
             prev_readiness = await self.oura_client.get_daily_readiness(prev_week_start, prev_week_end)
             prev_activity = await self.oura_client.get_daily_activity(prev_week_start, prev_week_end)
+
+            # Aggregate previous week sleep sessions
+            prev_sleep = aggregate_sleep_sessions_by_day(prev_sleep_sessions)
 
             # Analyze previous week
             prev_sleep_metrics = self.weekly_report_generator._analyze_sleep_metrics(prev_sleep)

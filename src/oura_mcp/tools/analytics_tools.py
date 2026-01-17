@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..api.client import OuraClient
 from ..utils.sleep_debt import SleepDebtTracker
 from ..utils.supplement_correlation import SupplementCorrelation
+from ..utils.sleep_aggregation import aggregate_sleep_sessions_by_day
 
 
 class AnalyticsToolProvider:
@@ -403,10 +404,13 @@ class AnalyticsToolProvider:
         start_date = end_date - timedelta(days=days)
 
         # Get sleep data - use get_sleep() which has accurate durations
-        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
 
-        if not sleep_data:
+        if not sleep_sessions:
             return "⚠️ No sleep data available for debt analysis"
+
+        # Aggregate biphasic/multiple sleep sessions per day
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
         # Generate comprehensive debt report
         report = self.sleep_debt_tracker.generate_debt_report(sleep_data, days)
@@ -448,11 +452,14 @@ class AnalyticsToolProvider:
         start_date = end_date - timedelta(days=days)
 
         # Get sleep and tag data
-        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
         tags_data = await self.oura_client.get_tags(start_date, end_date)
 
-        if not sleep_data:
+        if not sleep_sessions:
             return "⚠️ No sleep data available for correlation analysis"
+
+        # Aggregate biphasic/multiple sleep sessions per day
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
         if not tags_data:
             return "⚠️ No tags found. Please add tags in the Oura app to track supplements and interventions."
