@@ -4,36 +4,64 @@ A Model Context Protocol (MCP) server that provides AI assistants with structure
 
 ## Features
 
-### Intelligence Layer (Phase 2) ✅
-- **Baseline Tracking**: Personal 30-day rolling averages for all metrics
+### 🧠 Intelligence Layer (v0.3.1) ✅
 - **Recovery Detection**: Multi-signal recovery assessment with weighted scoring
 - **Training Readiness**: Sport-specific recommendations (general, endurance, strength, HIIT)
-- **Anomaly Detection**: Statistical detection of concerning patterns with severity classification
 - **Correlation Analysis**: Discover relationships between metrics (Pearson correlation)
-- **HRV Insights**: Detailed HRV analysis with baseline comparison and trend detection
+- **Anomaly Detection**: Statistical detection of concerning patterns with severity classification
 
-### Core Features (Phase 1) ✅
-- **Semantic Resources**: Pre-interpreted health metrics (sleep, readiness, HRV, activity)
-- **Analysis Tools**: Trend analysis, daily health briefs
-- **Privacy Controls**: Configurable access levels and audit logging
+### 📊 Data Access Tools (v0.3.0+) ✅
+- **Detailed Sleep Sessions**: Exact sleep/wake times, biphasic/polyphasic tracking
+- **Heart Rate Monitoring**: Time-series data with HR zones and activity breakdown
+- **Workout Sessions**: Complete workout history with metrics
+- **Stress & Recovery**: Daily stress levels and recovery time tracking
+- **SpO2 Monitoring**: Blood oxygen saturation trends
+- **VO2 Max**: Cardiorespiratory fitness estimates
+- **User Tags**: Custom notes and activity tracking
+
+### 🏥 Health Resources (v0.2.0+) ✅
+- **Sleep Analysis**: Detailed sleep stages, efficiency, scores
+- **Readiness Metrics**: HRV, temperature, recovery indicators
+- **Activity Tracking**: Steps, calories, activity scores
+- **HRV Insights**: Baseline comparison and trend detection
+- **Personal Info**: Age, weight, height, biological sex
+
+### 🔧 Core Features ✅
+- **Modular Architecture**: Clean separation of concerns (v0.3.1)
 - **Smart Caching**: Respects Oura API rate limits
+- **Privacy Controls**: Configurable access levels and audit logging
+- **Comprehensive Testing**: 100% test coverage for all features
 
 ## Project Structure
 
 ```
 oura-mcp-server/
-├── src/oura_mcp/          # Main package
-│   ├── api/               # Oura API client
-│   ├── core/              # MCP server core
-│   ├── resources/         # MCP resources (data endpoints)
-│   ├── tools/             # MCP tools (analysis functions)
-│   └── utils/             # Utilities (caching, baselines, etc.)
-├── tests/                 # Test suite
-│   ├── unit/              # Unit tests
-│   └── integration/       # Integration tests
-├── docs/                  # Documentation
-├── config/                # Configuration files
-└── main.py                # Server entry point
+├── src/oura_mcp/
+│   ├── api/
+│   │   └── client.py              # Oura API v2 client
+│   ├── core/
+│   │   └── server.py              # MCP server orchestration (930 lines)
+│   ├── resources/                 # MCP Resources (health data endpoints)
+│   │   ├── formatters.py          # Data formatting utilities
+│   │   ├── health_resources.py    # Sleep, readiness, activity, HRV
+│   │   └── metrics_resources.py   # Personal info, stress, SpO2
+│   ├── tools/                     # MCP Tools (analysis functions)
+│   │   ├── data_tools.py          # Data access (sessions, HR, workouts)
+│   │   ├── intelligence_tools.py  # Recovery, training, correlations
+│   │   └── debug_tools.py         # Debugging and utilities
+│   └── utils/
+│       ├── baselines.py           # Baseline tracking (30-day averages)
+│       ├── anomalies.py           # Anomaly detection engine
+│       ├── interpretation.py      # Health insights interpreter
+│       ├── config.py              # Configuration management
+│       └── logging.py             # Structured logging
+├── tests/
+│   ├── test_server.py             # Basic server tests
+│   ├── test_advanced_features.py  # Intelligence features tests
+│   └── test_api.py                # API integration tests
+├── docs/                          # Comprehensive documentation
+├── config/                        # Configuration templates
+└── main.py                        # Server entry point
 ```
 
 ## Quick Start
@@ -171,10 +199,11 @@ ruff check src/
 
 ## Roadmap
 
-- [x] Phase 1: Core MVP (basic resources + authentication)
-- [x] Phase 2: Intelligence (baseline tracking, recovery detection, correlations, anomaly detection) ✅ **COMPLETED 2025-12-25**
-- [ ] Phase 3: Advanced (predictions, sleep debt, pattern recognition)
-- [ ] Phase 4: Polish (comprehensive logging, optimization)
+- [x] **v0.1.0 - v0.2.0**: Core MVP (basic resources + authentication)
+- [x] **v0.3.0**: Complete API coverage (all Oura v2 endpoints) ✅ **2025-01-15**
+- [x] **v0.3.1**: Code refactoring & modular architecture ✅ **2026-01-17**
+- [ ] **v0.4.0**: Advanced intelligence (predictions, sleep debt, pattern recognition)
+- [ ] **v0.5.0**: Polish (comprehensive logging, performance optimization)
 
 ## License
 
