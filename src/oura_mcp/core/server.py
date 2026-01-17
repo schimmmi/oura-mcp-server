@@ -123,6 +123,30 @@ class OuraMCPServer:
                     }
                 ])
 
+            # Add personal info resource
+            resources.append({
+                "uri": "oura://personal_info",
+                "name": "Personal Information",
+                "mimeType": "application/json",
+                "description": "User profile (age, weight, height, biological sex)"
+            })
+
+            # Add stress resource
+            resources.append({
+                "uri": "oura://stress/today",
+                "name": "Today's Stress",
+                "mimeType": "application/json",
+                "description": "Daytime stress levels and recovery time"
+            })
+
+            # Add SpO2 resource
+            resources.append({
+                "uri": "oura://spo2/latest",
+                "name": "Latest SpO2",
+                "mimeType": "application/json",
+                "description": "Blood oxygen saturation during sleep"
+            })
+
             return resources
         
         @self.server.read_resource()
@@ -154,6 +178,17 @@ class OuraMCPServer:
                         return await self._get_hrv_resource(f"trend_{period}")
                     else:
                         raise ValueError(f"Unknown HRV resource: {uri}")
+
+                elif uri == "oura://personal_info":
+                    return await self._get_personal_info_resource()
+
+                elif uri.startswith("oura://stress/"):
+                    period = uri.split("/")[-1]
+                    return await self._get_stress_resource(period)
+
+                elif uri.startswith("oura://spo2/"):
+                    period = uri.split("/")[-1]
+                    return await self._get_spo2_resource(period)
 
                 else:
                     raise ValueError(f"Unknown resource URI: {uri}")
@@ -302,6 +337,102 @@ class OuraMCPServer:
                 }
             ))
 
+            # Add heart rate tool
+            tools.append(types.Tool(
+                name="get_heart_rate_data",
+                description="Get time-series heart rate data with HR zones and patterns",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "hours": {
+                            "type": "integer",
+                            "description": "Number of hours to retrieve",
+                            "default": 24
+                        }
+                    }
+                }
+            ))
+
+            # Add workout sessions tool
+            tools.append(types.Tool(
+                name="get_workout_sessions",
+                description="Get detailed workout/activity sessions with HR data and metrics",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 7
+                        }
+                    }
+                }
+            ))
+
+            # Add daily stress tool
+            tools.append(types.Tool(
+                name="get_daily_stress",
+                description="Get daily stress levels, stress load, and recovery time",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 7
+                        }
+                    }
+                }
+            ))
+
+            # Add SpO2 tool
+            tools.append(types.Tool(
+                name="get_spo2_data",
+                description="Get blood oxygen saturation (SpO2) data during sleep",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 7
+                        }
+                    }
+                }
+            ))
+
+            # Add VO2 Max tool
+            tools.append(types.Tool(
+                name="get_vo2_max",
+                description="Get VO2 Max (cardiorespiratory fitness) estimates",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 30
+                        }
+                    }
+                }
+            ))
+
+            # Add tags tool
+            tools.append(types.Tool(
+                name="get_tags",
+                description="Get user-created tags and notes",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to retrieve",
+                            "default": 7
+                        }
+                    }
+                }
+            ))
+
             return tools
         
         @self.server.call_tool()
@@ -349,6 +480,36 @@ class OuraMCPServer:
                 elif name == "get_sleep_sessions":
                     days = arguments.get("days", 3)
                     result = await self._tool_get_sleep_sessions(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_heart_rate_data":
+                    hours = arguments.get("hours", 24)
+                    result = await self._tool_get_heart_rate_data(hours)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_workout_sessions":
+                    days = arguments.get("days", 7)
+                    result = await self._tool_get_workout_sessions(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_daily_stress":
+                    days = arguments.get("days", 7)
+                    result = await self._tool_get_daily_stress(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_spo2_data":
+                    days = arguments.get("days", 7)
+                    result = await self._tool_get_spo2_data(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_vo2_max":
+                    days = arguments.get("days", 30)
+                    result = await self._tool_get_vo2_max(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "get_tags":
+                    days = arguments.get("days", 7)
+                    result = await self._tool_get_tags(days)
                     return [types.TextContent(type="text", text=result)]
 
                 else:
@@ -480,7 +641,126 @@ class OuraMCPServer:
 
         else:
             raise ValueError(f"Unknown HRV period: {period}")
-    
+
+    async def _get_personal_info_resource(self) -> str:
+        """Get personal information resource."""
+        personal_info = await self.oura_client.get_personal_info()
+
+        result = f"# 👤 Personal Information\n\n"
+
+        age = personal_info.get("age")
+        weight = personal_info.get("weight")
+        height = personal_info.get("height")
+        biological_sex = personal_info.get("biological_sex")
+        email = personal_info.get("email")
+
+        if age:
+            result += f"- **Age:** {age} years\n"
+        if weight:
+            result += f"- **Weight:** {weight} kg\n"
+        if height:
+            result += f"- **Height:** {height / 100:.2f} m\n"
+        if biological_sex:
+            result += f"- **Biological Sex:** {biological_sex}\n"
+        if email:
+            result += f"- **Email:** {email}\n"
+
+        return result
+
+    async def _get_stress_resource(self, period: str) -> str:
+        """Get stress resource data."""
+        today = date.today()
+
+        if period == "today":
+            start_date = today
+            end_date = today
+        else:
+            raise ValueError(f"Unknown stress period: {period}")
+
+        data = await self.oura_client.get_daily_stress(start_date, end_date)
+
+        if not data:
+            return "⚠️ No stress data available for today\n\n*Note: Stress tracking may not be available for your ring generation.*"
+
+        stress_data = data[-1]
+        day_summary = stress_data.get("day_summary", {})
+
+        result = f"# 😰 Stress Report\n\n"
+        result += f"**Date:** {stress_data.get('day')}\n\n"
+
+        stress_high = day_summary.get("stress_high", 0)
+        recovery_high = day_summary.get("recovery_high", 0)
+
+        result += f"## Daytime Balance\n"
+        result += f"- **High Stress Time:** {stress_high // 60}h {stress_high % 60}m\n"
+        result += f"- **High Recovery Time:** {recovery_high // 60}h {recovery_high % 60}m\n\n"
+
+        # Calculate ratio
+        total_time = stress_high + recovery_high
+        if total_time > 0:
+            stress_pct = (stress_high / total_time * 100)
+            recovery_pct = (recovery_high / total_time * 100)
+
+            result += f"## Distribution\n"
+            result += f"- **Stress:** {stress_pct:.1f}%\n"
+            result += f"- **Recovery:** {recovery_pct:.1f}%\n\n"
+
+            if stress_pct > 60:
+                status = "🔴 High Stress Day"
+                recommendation = "Consider relaxation techniques, reduce workload if possible"
+            elif stress_pct > 40:
+                status = "🟡 Moderate Stress"
+                recommendation = "Balanced day, maintain healthy habits"
+            else:
+                status = "✅ Low Stress"
+                recommendation = "Good balance, recovery time is adequate"
+
+            result += f"**Status:** {status}\n"
+            result += f"**Recommendation:** {recommendation}\n"
+
+        return result
+
+    async def _get_spo2_resource(self, period: str) -> str:
+        """Get SpO2 resource data."""
+        today = date.today()
+
+        if period == "latest":
+            start_date = today
+            end_date = today
+        else:
+            raise ValueError(f"Unknown SpO2 period: {period}")
+
+        data = await self.oura_client.get_daily_spo2(start_date, end_date)
+
+        if not data:
+            return "⚠️ No SpO2 data available\n\n*Note: SpO2 tracking requires Oura Ring Gen 3.*"
+
+        spo2_data = data[-1]
+
+        result = f"# 🫁 Blood Oxygen (SpO2)\n\n"
+        result += f"**Date:** {spo2_data.get('day')}\n\n"
+
+        spo2_percentage = spo2_data.get("spo2_percentage", {})
+        avg_spo2 = spo2_percentage.get("average")
+
+        if avg_spo2:
+            result += f"**Average SpO2:** {avg_spo2:.1f}%\n\n"
+
+            if avg_spo2 >= 95:
+                status = "✅ Normal"
+                note = "Your blood oxygen levels are within normal range."
+            elif avg_spo2 >= 90:
+                status = "⚠️ Borderline"
+                note = "Slightly below normal. Monitor for patterns and consider consulting a healthcare provider if persistent."
+            else:
+                status = "🔴 Low"
+                note = "Consistently low SpO2. Consult a healthcare provider."
+
+            result += f"**Status:** {status}\n"
+            result += f"*{note}*\n"
+
+        return result
+
     # === Tool Implementations ===
     
     async def _tool_generate_daily_brief(self) -> str:
@@ -666,6 +946,322 @@ class OuraMCPServer:
                 result += "\n"
 
             result += "---\n\n"
+
+        return result
+
+    async def _tool_get_heart_rate_data(self, hours: int) -> str:
+        """Get time-series heart rate data."""
+        from datetime import datetime
+
+        end_datetime = datetime.now()
+        start_datetime = end_datetime - timedelta(hours=hours)
+
+        # Get heart rate data
+        hr_data = await self.oura_client.get_heart_rate(start_datetime, end_datetime)
+
+        if not hr_data:
+            return f"No heart rate data available for the last {hours} hours"
+
+        result = f"# ❤️ Heart Rate Data (Last {hours} hours)\n\n"
+        result += f"**Retrieved {len(hr_data)} data points**\n\n"
+
+        # Calculate statistics
+        hr_values = [point.get("bpm") for point in hr_data if point.get("bpm")]
+        if hr_values:
+            avg_hr = sum(hr_values) / len(hr_values)
+            min_hr = min(hr_values)
+            max_hr = max(hr_values)
+
+            result += f"## Summary Statistics\n"
+            result += f"- **Average HR:** {avg_hr:.0f} bpm\n"
+            result += f"- **Min HR:** {min_hr} bpm\n"
+            result += f"- **Max HR:** {max_hr} bpm\n"
+            result += f"- **Range:** {max_hr - min_hr} bpm\n\n"
+
+            # HR Zones (simple approximation: max HR = 220 - age, assuming age 30)
+            max_hr_estimate = 190  # Can be made dynamic with personal_info
+            zone1 = int(max_hr_estimate * 0.50)
+            zone2 = int(max_hr_estimate * 0.60)
+            zone3 = int(max_hr_estimate * 0.70)
+            zone4 = int(max_hr_estimate * 0.80)
+            zone5 = int(max_hr_estimate * 0.90)
+
+            # Count time in zones
+            zone_counts = {
+                "Rest (<50%)": sum(1 for hr in hr_values if hr < zone1),
+                "Zone 1 (50-60%)": sum(1 for hr in hr_values if zone1 <= hr < zone2),
+                "Zone 2 (60-70%)": sum(1 for hr in hr_values if zone2 <= hr < zone3),
+                "Zone 3 (70-80%)": sum(1 for hr in hr_values if zone3 <= hr < zone4),
+                "Zone 4 (80-90%)": sum(1 for hr in hr_values if zone4 <= hr < zone5),
+                "Zone 5 (90%+)": sum(1 for hr in hr_values if hr >= zone5),
+            }
+
+            result += f"## HR Zones Distribution\n"
+            for zone, count in zone_counts.items():
+                pct = (count / len(hr_values) * 100) if hr_values else 0
+                result += f"- **{zone}:** {count} points ({pct:.1f}%)\n"
+            result += "\n"
+
+        # Group by source
+        by_source = {}
+        for point in hr_data:
+            source = point.get("source", "unknown")
+            if source not in by_source:
+                by_source[source] = []
+            by_source[source].append(point.get("bpm"))
+
+        if by_source:
+            result += f"## By Activity Type\n"
+            for source, values in by_source.items():
+                if values:
+                    avg = sum(values) / len(values)
+                    result += f"- **{source.title()}:** {len(values)} points, avg {avg:.0f} bpm\n"
+
+        return result
+
+    async def _tool_get_workout_sessions(self, days: int) -> str:
+        """Get detailed workout sessions."""
+        from datetime import datetime
+
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get workout sessions
+        sessions = await self.oura_client.get_sessions(start_date, end_date)
+
+        if not sessions:
+            return f"No workout sessions available for the last {days} days"
+
+        result = f"# 🏋️ Workout Sessions (Last {days} days)\n\n"
+        result += f"**Retrieved {len(sessions)} sessions**\n\n"
+
+        # Sort by date
+        sessions_sorted = sorted(sessions, key=lambda s: s.get("day", ""), reverse=True)
+
+        for session in sessions_sorted:
+            day = session.get("day", "Unknown")
+            start_time = session.get("start_datetime", "")
+            if start_time:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                time_str = start_dt.strftime("%H:%M")
+            else:
+                time_str = "N/A"
+
+            session_type = session.get("type", "Unknown")
+
+            result += f"## 📅 {day} at {time_str}\n\n"
+            result += f"**Type:** {session_type}\n\n"
+
+            # Duration
+            duration_seconds = session.get("total_duration", 0)
+            if duration_seconds:
+                hours = duration_seconds // 3600
+                minutes = (duration_seconds % 3600) // 60
+                if hours > 0:
+                    result += f"**Duration:** {hours}h {minutes}m\n"
+                else:
+                    result += f"**Duration:** {minutes}m\n"
+
+            # Heart rate metrics
+            avg_hr = session.get("heart_rate", {}).get("average")
+            max_hr = session.get("heart_rate", {}).get("maximum")
+            if avg_hr:
+                result += f"**Avg HR:** {avg_hr} bpm\n"
+            if max_hr:
+                result += f"**Max HR:** {max_hr} bpm\n"
+
+            # Calories
+            calories = session.get("calories", 0)
+            if calories:
+                result += f"**Calories:** {calories} kcal\n"
+
+            # Distance (if available)
+            distance = session.get("distance", 0)
+            if distance:
+                result += f"**Distance:** {distance / 1000:.2f} km\n"
+
+            result += "\n---\n\n"
+
+        return result
+
+    async def _tool_get_daily_stress(self, days: int) -> str:
+        """Get daily stress data."""
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get stress data
+        stress_data = await self.oura_client.get_daily_stress(start_date, end_date)
+
+        if not stress_data:
+            return f"⚠️ No stress data available for the last {days} days\n\n*Note: Stress tracking may not be available for your Oura ring generation or requires opt-in.*"
+
+        result = f"# 😰 Daily Stress (Last {days} days)\n\n"
+        result += f"**Retrieved {len(stress_data)} records**\n\n"
+
+        # Calculate averages
+        day_summaries = []
+        for record in stress_data:
+            day = record.get("day", "Unknown")
+            day_summary = record.get("day_summary")
+
+            if day_summary:
+                stress_high = day_summary.get("stress_high", 0)
+                recovery_high = day_summary.get("recovery_high", 0)
+
+                day_summaries.append({
+                    "day": day,
+                    "stress_high": stress_high,
+                    "recovery_high": recovery_high
+                })
+
+        if day_summaries:
+            avg_stress = sum(d["stress_high"] for d in day_summaries) / len(day_summaries)
+            avg_recovery = sum(d["recovery_high"] for d in day_summaries) / len(day_summaries)
+
+            result += f"## Average (Period)\n"
+            result += f"- **Stress Time:** {avg_stress / 60:.1f} hours/day\n"
+            result += f"- **Recovery Time:** {avg_recovery / 60:.1f} hours/day\n\n"
+
+        result += f"## Daily Breakdown\n\n"
+        for record in day_summaries:
+            result += f"### {record['day']}\n"
+            result += f"- **High Stress:** {record['stress_high'] // 60}h {record['stress_high'] % 60}m\n"
+            result += f"- **High Recovery:** {record['recovery_high'] // 60}h {record['recovery_high'] % 60}m\n\n"
+
+        return result
+
+    async def _tool_get_spo2_data(self, days: int) -> str:
+        """Get SpO2 (blood oxygen saturation) data."""
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get SpO2 data
+        spo2_data = await self.oura_client.get_daily_spo2(start_date, end_date)
+
+        if not spo2_data:
+            return f"⚠️ No SpO2 data available for the last {days} days\n\n*Note: SpO2 tracking requires Oura Ring Gen 3 and may need to be enabled in settings.*"
+
+        result = f"# 🫁 Blood Oxygen (SpO2) Data (Last {days} days)\n\n"
+        result += f"**Retrieved {len(spo2_data)} records**\n\n"
+
+        # Calculate statistics
+        spo2_values = [r.get("spo2_percentage", {}).get("average") for r in spo2_data if r.get("spo2_percentage", {}).get("average")]
+
+        if spo2_values:
+            avg_spo2 = sum(spo2_values) / len(spo2_values)
+            min_spo2 = min(spo2_values)
+            max_spo2 = max(spo2_values)
+
+            result += f"## Summary\n"
+            result += f"- **Average SpO2:** {avg_spo2:.1f}%\n"
+            result += f"- **Range:** {min_spo2:.1f}% - {max_spo2:.1f}%\n\n"
+
+            # Interpretation
+            if avg_spo2 >= 95:
+                status = "✅ Normal"
+                note = "Your blood oxygen levels are within normal range."
+            elif avg_spo2 >= 90:
+                status = "⚠️ Borderline"
+                note = "Slightly below normal. Monitor for patterns."
+            else:
+                status = "🔴 Low"
+                note = "Consistently low SpO2. Consider consulting a healthcare provider."
+
+            result += f"**Status:** {status}\n"
+            result += f"*{note}*\n\n"
+
+        result += f"## Daily Values\n\n"
+        for record in spo2_data:
+            day = record.get("day", "Unknown")
+            spo2_avg = record.get("spo2_percentage", {}).get("average")
+            if spo2_avg:
+                result += f"- **{day}:** {spo2_avg:.1f}%\n"
+
+        return result
+
+    async def _tool_get_vo2_max(self, days: int) -> str:
+        """Get VO2 Max data."""
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get VO2 Max data
+        vo2_data = await self.oura_client.get_vo2_max(start_date, end_date)
+
+        if not vo2_data:
+            return f"⚠️ No VO2 Max data available for the last {days} days\n\n*Note: VO2 Max requires regular cardio activity tracking and may take several days to calculate.*"
+
+        result = f"# 🏃 VO2 Max (Last {days} days)\n\n"
+        result += f"**Retrieved {len(vo2_data)} estimates**\n\n"
+
+        # Get latest estimate
+        if vo2_data:
+            latest = vo2_data[-1]
+            vo2_value = latest.get("vo2_max")
+            day = latest.get("day", "Unknown")
+
+            if vo2_value:
+                result += f"## Latest Estimate ({day})\n"
+                result += f"**VO2 Max:** {vo2_value:.1f} ml/kg/min\n\n"
+
+                # Fitness level interpretation (approximate, for age 30-40)
+                if vo2_value >= 45:
+                    level = "Excellent 🏆"
+                elif vo2_value >= 38:
+                    level = "Good 💪"
+                elif vo2_value >= 32:
+                    level = "Average 👍"
+                elif vo2_value >= 25:
+                    level = "Below Average 📉"
+                else:
+                    level = "Poor 🔴"
+
+                result += f"**Fitness Level:** {level}\n\n"
+                result += f"*Note: Fitness levels vary by age and sex. This is a general estimate.*\n\n"
+
+        # Show trend
+        result += f"## Historical Values\n\n"
+        for record in vo2_data:
+            day = record.get("day", "Unknown")
+            vo2_value = record.get("vo2_max")
+            if vo2_value:
+                result += f"- **{day}:** {vo2_value:.1f} ml/kg/min\n"
+
+        return result
+
+    async def _tool_get_tags(self, days: int) -> str:
+        """Get user-created tags."""
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get tags
+        tags = await self.oura_client.get_tags(start_date, end_date)
+
+        if not tags:
+            return f"No tags found for the last {days} days\n\n*Create tags in the Oura app to track activities, symptoms, or notes.*"
+
+        result = f"# 🏷️ Tags & Notes (Last {days} days)\n\n"
+        result += f"**Retrieved {len(tags)} tags**\n\n"
+
+        # Group by day
+        tags_by_day = {}
+        for tag in tags:
+            day = tag.get("day", "Unknown")
+            if day not in tags_by_day:
+                tags_by_day[day] = []
+            tags_by_day[day].append(tag)
+
+        # Display by day
+        for day in sorted(tags_by_day.keys(), reverse=True):
+            result += f"## 📅 {day}\n\n"
+            for tag in tags_by_day[day]:
+                tag_type = tag.get("tag_type_code", "unknown")
+                text = tag.get("text", "")
+
+                result += f"- **{tag_type}**"
+                if text:
+                    result += f": {text}"
+                result += "\n"
+            result += "\n"
 
         return result
 

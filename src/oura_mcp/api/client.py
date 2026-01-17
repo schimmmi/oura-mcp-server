@@ -339,3 +339,115 @@ class OuraClient:
         
         response = await self._get("/v2/usercollection/session", params)
         return response.get("data", [])
+
+    async def get_daily_stress(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get daily stress data.
+
+        Args:
+            start_date: Start date
+            end_date: End date
+
+        Returns:
+            List of daily stress records with stress load, recovery time, etc.
+        """
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=1)
+
+        params = {
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date),
+        }
+
+        response = await self._get("/v2/usercollection/daily_stress", params)
+        return response.get("data", [])
+
+    async def get_daily_spo2(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get daily SpO2 (blood oxygen saturation) data.
+
+        Args:
+            start_date: Start date
+            end_date: End date
+
+        Returns:
+            List of daily SpO2 records with average percentage
+        """
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=1)
+
+        params = {
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date),
+        }
+
+        response = await self._get("/v2/usercollection/daily_spo2", params)
+        return response.get("data", [])
+
+    async def get_vo2_max(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get VO2 Max (cardiorespiratory fitness) data.
+
+        Args:
+            start_date: Start date
+            end_date: End date
+
+        Returns:
+            List of VO2 Max estimates
+        """
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=30)
+
+        params = {
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date),
+        }
+
+        response = await self._get("/v2/usercollection/vo2_max", params)
+        return response.get("data", [])
+
+    async def get_tags(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get user-created tags.
+
+        Args:
+            start_date: Start date
+            end_date: End date
+
+        Returns:
+            List of tags with timestamps and comments
+        """
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=7)
+
+        params = {
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date),
+        }
+
+        response = await self._get("/v2/usercollection/tag", params)
+        return response.get("data", [])
