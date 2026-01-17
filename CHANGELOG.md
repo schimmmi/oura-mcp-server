@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-01-17
+
+### 🎉 Added - Personalized Health Insights
+- **Chronotype Analysis**: MSF-based scientific chronotype classification (Night Owl, Morning Lark, etc.)
+  - Main sleep extraction from biphasic/polyphasic patterns
+  - Social jetlag calculation
+  - Weekday vs weekend comparison
+  - Activity pattern correlation
+  - Personalized recommendations by chronotype
+- **Personal Sleep Need Calculation**: Auto-detection via readiness correlation
+  - Method 1: Readiness correlation (top 25% performance days)
+  - Method 2: Sleep score correlation
+  - Method 3: Duration percentile (75th)
+  - Fallback: Chronotype-based defaults
+- **Adaptive Severity Thresholds**: All thresholds now scale to personal sleep need
+  - New "elevated" severity level (between moderate and severe)
+  - Scale factor pattern: `personal_need / 8.0`
+  - Applied to sleep debt, duration alerts, consecutive nights
+
+### 🐛 Fixed
+- **Chronotype Misclassification**: Naps no longer skew bedtime averages
+- **Consecutive Bad Nights**: Fixed false positives from aggregated sessions with score=0
+  - Added efficiency-as-proxy logic when score unavailable
+  - Dual criteria: score + duration deficit
+- **RHR Data Type Confusion**: Clarified that RHR values are scores (0-100), not BPM
+  - Inverted deviation logic (lower score = elevated HR)
+  - Updated all reporting with clear labels
+
+### 🔧 Changed
+- **Sleep Debt Tracker**: Now auto-detects personal sleep need (no hardcoded 8h)
+- **Alert System**: Constructor accepts `personal_sleep_need` parameter
+- **Chronotype Analyzer**: Works with raw sessions (not aggregated)
+- **Intelligence Tools**: Pass raw sessions to chronotype analyzer
+
+### 📚 Documentation
+- Created comprehensive v0.5.0 release notes
+- Updated README.md with chronotype examples
+- Added scientific basis documentation (MSF methodology)
+
+### ✅ Testing
+- Validated with 30+ days of real biphasic sleep data
+- Tested night owl chronotype detection
+- Verified readiness correlation accuracy
+- Confirmed threshold scaling correctness
+
+---
+
 ## [0.3.1] - 2026-01-17
 
 ### 🏗️ Changed - Major Code Refactoring

@@ -4,13 +4,15 @@ A Model Context Protocol (MCP) server that provides AI assistants with structure
 
 ## Features
 
-### 🧠 Health Intelligence (v0.4.0) ✅
+### 🧠 Health Intelligence (v0.5.0) ✅
+- **Chronotype Analysis**: MSF-based classification (Night Owl, Morning Lark) with personalized recommendations (NEW in v0.5.0)
+- **Personalized Sleep Need**: Auto-detection via readiness correlation - no more one-size-fits-all 8h target (NEW in v0.5.0)
 - **Analytics**: Comprehensive statistical reports with correlations and trend detection
 - **Predictions**: 7-day forecasts for sleep, readiness, and activity with ensemble learning
-- **Sleep Optimization**: Optimal bedtime calculator and sleep debt tracking (50% payback rate)
+- **Sleep Optimization**: Optimal bedtime calculator and personalized sleep debt tracking
 - **Supplement Analysis**: Correlation tracking between supplements and health metrics
 - **Illness Detection**: Multi-signal early warning system (1-2 day advance notice)
-- **Health Alerts**: Automated monitoring with severity classification
+- **Health Alerts**: Automated monitoring with personalized, adaptive thresholds
 - **Weekly Reports**: Comprehensive summaries with week-over-week comparisons
 - **Recovery Detection**: Multi-signal recovery assessment with weighted scoring
 - **Training Readiness**: Sport-specific recommendations (general, endurance, strength, HIIT)
@@ -59,6 +61,7 @@ oura-mcp-server/
 │   │   └── debug_tools.py         # Weekly reports and utilities
 │   └── utils/
 │       ├── sleep_aggregation.py   # Biphasic/polyphasic sleep handling
+│       ├── chronotype_analysis.py # Chronotype detection (MSF-based)
 │       ├── illness_detection.py   # Multi-signal illness warning system
 │       ├── sleep_debt.py          # Sleep debt tracking with recovery
 │       ├── baselines.py           # Baseline tracking (30-day averages)
@@ -160,10 +163,14 @@ Add to your Claude config (`~/Library/Application Support/Claude/claude_desktop_
 - "What's my VO2 Max?"
 - "Show me the tags I created this week"
 
-**Analytics & Statistics (NEW in v0.4.0):**
-- "Generate a statistics report for the last 30 days"
+**Chronotype & Sleep Optimization (NEW in v0.5.0):**
+- "What's my chronotype based on my sleep patterns?"
+- "Calculate my personal sleep need using my readiness data"
 - "What's my sleep debt and how long will recovery take?"
 - "Calculate my optimal bedtime based on recent patterns"
+
+**Analytics & Statistics:**
+- "Generate a statistics report for the last 30 days"
 - "Does my magnesium supplement improve my sleep quality?"
 - "Show me a comprehensive weekly health report"
 
@@ -204,7 +211,8 @@ ruff check src/
 
 ## Documentation
 
-- **[v0.4.0 Release Notes](releases/v0.4.0_RELEASE_NOTES.md)** - Complete v0.4.0 documentation (NEW)
+- **[v0.5.0 Release Notes](releases/v0.5.0_RELEASE_NOTES.md)** - Personalized health insights (NEW)
+- **[v0.4.0 Release Notes](releases/v0.4.0_RELEASE_NOTES.md)** - Complete v0.4.0 documentation
 - **[Phase 2 Quick Start Guide](docs/PHASE2_QUICKSTART.md)** - User guide for intelligence features
 - **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete Phase 2 documentation
 - **[MCP Design](docs/MCP_DESIGN.md)** - Architecture and design documentation
@@ -226,7 +234,7 @@ ruff check src/
 - [x] **v0.3.0**: Complete API coverage (all Oura v2 endpoints) ✅ **2025-01-15**
 - [x] **v0.3.1**: Code refactoring & modular architecture ✅ **2026-01-17**
 - [x] **v0.4.0**: Health intelligence platform (analytics, predictions, illness detection) ✅ **2026-01-17**
-- [ ] **v0.5.0**: Polish (comprehensive logging, performance optimization)
+- [x] **v0.5.0**: Personalized health insights (chronotype, adaptive thresholds) ✅ **2026-01-17**
 
 ## License
 

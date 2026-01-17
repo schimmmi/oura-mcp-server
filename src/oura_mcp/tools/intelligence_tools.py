@@ -12,6 +12,7 @@ from ..utils.bedtime_calculator import BedtimeCalculator
 from ..utils.alert_system import AlertSystem
 from ..utils.sleep_aggregation import aggregate_sleep_sessions_by_day
 from ..utils.illness_detection import IllnessDetector
+from ..utils.chronotype_analysis import ChronotypeAnalyzer
 
 
 class IntelligenceToolProvider:
@@ -31,6 +32,7 @@ class IntelligenceToolProvider:
         self.bedtime_calculator = BedtimeCalculator()
         self.alert_system = AlertSystem()
         self.illness_detector = IllnessDetector(baseline_days=30)
+        self.chronotype_analyzer = ChronotypeAnalyzer(min_days=14)
 
     async def detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""
@@ -395,15 +397,23 @@ class IntelligenceToolProvider:
         # Aggregate biphasic/multiple sleep sessions per day
         sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
+        # Calculate personal sleep need for accurate thresholds
+        from ..utils.sleep_debt import SleepDebtTracker
+        tracker = SleepDebtTracker()
+        personal_sleep_need, _ = tracker.calculate_personal_sleep_need(sleep_data, readiness_data)
+
+        # Create alert system with personalized thresholds
+        alert_system = AlertSystem(personal_sleep_need=personal_sleep_need)
+
         # Check for alerts
-        alerts = self.alert_system.check_all_alerts(
+        alerts = alert_system.check_all_alerts(
             sleep_data,
             readiness_data,
             activity_data,
             lookback_days
         )
 
-        return self.alert_system.format_alerts_report(alerts)
+        return alert_system.format_alerts_report(alerts)
 
     async def detect_illness_risk(self, lookback_days: int = 30) -> str:
         """
@@ -438,3 +448,45 @@ class IntelligenceToolProvider:
         )
 
         return self.illness_detector.format_illness_report(detection)
+
+    async def analyze_chronotype(
+        self,
+        lookback_days: int = 30,
+        include_activity: bool = True
+    ) -> str:
+        """
+        Analyze chronotype (morning lark, night owl, intermediate) based on sleep timing
+        and activity patterns.
+
+        Args:
+            lookback_days: Number of days to analyze (minimum 14, recommended 30+)
+            include_activity: Include activity pattern analysis
+
+        Returns:
+            Formatted chronotype analysis report
+        """
+        end_date = date.today()
+        start_date = end_date - timedelta(days=lookback_days)
+
+        # Get sleep session data (need timing information)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
+
+        if not sleep_sessions:
+            return "⚠️ No sleep data available for chronotype analysis"
+
+        # For chronotype analysis, pass RAW sessions (not aggregated)
+        # The analyzer will extract main sleep sessions internally
+        # This ensures naps don't skew the chronotype classification
+
+        # Get activity data if requested
+        activity_data = None
+        if include_activity:
+            activity_data = await self.oura_client.get_daily_activity(start_date, end_date)
+
+        # Run chronotype analysis with raw sessions
+        analysis = self.chronotype_analyzer.analyze_chronotype(
+            sleep_sessions,
+            activity_data
+        )
+
+        return self.chronotype_analyzer.format_chronotype_report(analysis)

@@ -16,18 +16,92 @@ class SleepDebtTracker:
         "senior": 7 * 3600,    # 7 hours
     }
 
-    def __init__(self, optimal_sleep_hours: float = 8.0):
+    def __init__(self, optimal_sleep_hours: Optional[float] = None):
         """
         Initialize sleep debt tracker.
 
         Args:
-            optimal_sleep_hours: Target sleep duration in hours (default: 8)
+            optimal_sleep_hours: Target sleep duration in hours (default: None = auto-detect)
         """
-        self.optimal_sleep = optimal_sleep_hours * 3600  # Convert to seconds
+        self.optimal_sleep = optimal_sleep_hours * 3600 if optimal_sleep_hours else None  # Convert to seconds
+        self.auto_detect = optimal_sleep_hours is None
+
+    def calculate_personal_sleep_need(
+        self,
+        sleep_data: List[Dict[str, Any]],
+        readiness_data: Optional[List[Dict[str, Any]]] = None
+    ) -> Tuple[float, str]:
+        """
+        Calculate personal optimal sleep duration based on performance correlation.
+
+        Uses top 25% readiness days to determine optimal sleep duration.
+
+        Args:
+            sleep_data: List of daily sleep records
+            readiness_data: Optional readiness data for correlation
+
+        Returns:
+            Tuple of (optimal_hours, method_used)
+        """
+        if not sleep_data:
+            return (7.0, "fallback_default")
+
+        # Method 1: Use readiness correlation (most accurate)
+        if readiness_data and len(readiness_data) >= 14:
+            # Match sleep to readiness (next day)
+            sleep_readiness_pairs = []
+
+            for i, sleep_record in enumerate(sleep_data[:-1]):
+                sleep_duration = sleep_record.get('total_sleep_duration', 0) / 3600
+                sleep_day = sleep_record.get('day')
+
+                # Find corresponding readiness (next day)
+                for ready_record in readiness_data:
+                    ready_day = ready_record.get('day')
+                    if ready_day == sleep_day:
+                        readiness_score = ready_record.get('score')
+                        if readiness_score and sleep_duration > 0:
+                            sleep_readiness_pairs.append((sleep_duration, readiness_score))
+                        break
+
+            if len(sleep_readiness_pairs) >= 14:
+                # Find top 25% readiness days
+                sorted_pairs = sorted(sleep_readiness_pairs, key=lambda x: x[1], reverse=True)
+                top_25_pct = len(sorted_pairs) // 4
+                top_performers = sorted_pairs[:max(top_25_pct, 5)]
+
+                # Average sleep duration on best days
+                optimal = statistics.mean([pair[0] for pair in top_performers])
+                return (round(optimal, 1), "readiness_correlation")
+
+        # Method 2: Use sleep score correlation (less accurate but still good)
+        valid_sleep = [(r.get('total_sleep_duration', 0) / 3600, r.get('score', 0))
+                       for r in sleep_data
+                       if r.get('total_sleep_duration') and r.get('score')]
+
+        if len(valid_sleep) >= 14:
+            sorted_by_score = sorted(valid_sleep, key=lambda x: x[1], reverse=True)
+            top_25_pct = len(sorted_by_score) // 4
+            top_performers = sorted_by_score[:max(top_25_pct, 5)]
+
+            optimal = statistics.mean([pair[0] for pair in top_performers])
+            return (round(optimal, 1), "sleep_score_correlation")
+
+        # Method 3: Use 75th percentile of actual sleep (conservative)
+        durations = [r.get('total_sleep_duration', 0) / 3600 for r in sleep_data
+                     if r.get('total_sleep_duration', 0) > 0]
+
+        if durations:
+            percentile_75 = statistics.quantiles(durations, n=4)[2]  # 75th percentile
+            return (round(percentile_75, 1), "duration_percentile")
+
+        # Fallback: Use 7 hours for night owls as a reasonable default
+        return (7.0, "fallback_night_owl")
 
     def calculate_sleep_debt(
         self,
         sleep_data: List[Dict[str, Any]],
+        readiness_data: Optional[List[Dict[str, Any]]] = None,
         lookback_days: Optional[int] = None
     ) -> Dict[str, Any]:
         """
@@ -35,6 +109,7 @@ class SleepDebtTracker:
 
         Args:
             sleep_data: List of daily sleep records from Oura API
+            readiness_data: Optional readiness data for personal sleep need calculation
             lookback_days: Number of days to analyze (None = all data)
 
         Returns:
@@ -47,6 +122,16 @@ class SleepDebtTracker:
                 "days_analyzed": 0,
                 "status": "no_data"
             }
+
+        # Auto-detect personal sleep need if not set
+        if self.auto_detect:
+            optimal_hours, method = self.calculate_personal_sleep_need(sleep_data, readiness_data)
+            self.optimal_sleep = optimal_hours * 3600
+            personal_target_used = True
+            detection_method = method
+        else:
+            personal_target_used = False
+            detection_method = "user_specified"
 
         # Filter data if lookback specified
         if lookback_days:
@@ -100,12 +185,20 @@ class SleepDebtTracker:
             "severity": severity,
             "recovery_days_estimate": recovery_days,
             "debt_over_time": debt_over_time,
+            "optimal_sleep_hours": round(self.optimal_sleep / 3600, 1),
+            "personal_target_used": personal_target_used,
+            "detection_method": detection_method,
             "status": "calculated"
         }
 
     def _assess_debt_severity(self, total_debt: float, avg_deficit: float) -> Dict[str, str]:
         """
         Assess the severity of sleep debt.
+
+        Thresholds are scaled based on personal sleep need:
+        - For 8h sleepers: thresholds as-is
+        - For 6h sleepers: thresholds scaled down ~25%
+        - For 9h sleepers: thresholds scaled up ~12%
 
         Args:
             total_debt: Total accumulated debt in hours
@@ -114,30 +207,57 @@ class SleepDebtTracker:
         Returns:
             Dictionary with severity assessment
         """
-        if total_debt < 2:
+        # Scale thresholds based on personal sleep need
+        # Base thresholds assume 8h sleep need
+        optimal_hours = self.optimal_sleep / 3600
+        scale_factor = optimal_hours / 8.0
+
+        # Scaled thresholds based on "nights of sleep" equivalents
+        # These represent absolute debt thresholds that scale with personal sleep need
+        # Minimal: < 0.25 nights (~2h for 8h sleeper)
+        # Mild: < 1 night (~8h for 8h sleeper)
+        # Moderate: < 2 nights (~16h for 8h sleeper)
+        # Elevated: < 5 nights (~40h for 8h sleeper)
+        # Severe: < 7 nights (~56h for 8h sleeper)
+        # Critical: >= 7 nights (~56h for 8h sleeper)
+        threshold_minimal = 2 * scale_factor
+        threshold_mild = 8 * scale_factor
+        threshold_moderate = 16 * scale_factor
+        threshold_elevated = 40 * scale_factor
+        threshold_severe = 56 * scale_factor
+
+        # Calculate debt in "nights equivalent" for context
+        nights_of_debt = total_debt / optimal_hours
+
+        if total_debt < threshold_minimal:
             level = "minimal"
             emoji = "🟢"
             description = "Minimal sleep debt - you're well rested"
             impact = "Little to no impact on performance"
-        elif total_debt < 5:
+        elif total_debt < threshold_mild:
             level = "mild"
             emoji = "🟡"
-            description = "Mild sleep debt - slight fatigue possible"
+            description = f"Mild sleep debt (~{nights_of_debt:.1f} nights behind)"
             impact = "Minor impact on cognitive function and mood"
-        elif total_debt < 10:
+        elif total_debt < threshold_moderate:
             level = "moderate"
             emoji = "🟠"
-            description = "Moderate sleep debt - noticeable fatigue"
-            impact = "Reduced cognitive performance, increased stress"
-        elif total_debt < 20:
-            level = "severe"
+            description = f"Moderate sleep debt (~{nights_of_debt:.1f} nights behind)"
+            impact = "Noticeable fatigue, reduced cognitive performance"
+        elif total_debt < threshold_elevated:
+            level = "elevated"
             emoji = "🔴"
-            description = "Severe sleep debt - significant impairment"
+            description = f"Elevated sleep debt (~{nights_of_debt:.1f} nights behind)"
+            impact = "Significant fatigue, impaired decision-making"
+        elif total_debt < threshold_severe:
+            level = "severe"
+            emoji = "🚨"
+            description = f"Severe sleep debt (~{nights_of_debt:.1f} nights behind) - prioritize recovery"
             impact = "Major cognitive deficits, health risks increasing"
         else:
             level = "critical"
             emoji = "💀"
-            description = "Critical sleep debt - immediate action needed"
+            description = f"Critical sleep debt (~{nights_of_debt:.1f} nights behind) - immediate action needed"
             impact = "Serious health risks, severely impaired function"
 
         return {
@@ -177,7 +297,8 @@ class SleepDebtTracker:
     def generate_debt_report(
         self,
         sleep_data: List[Dict[str, Any]],
-        lookback_days: int = 30
+        lookback_days: int = 30,
+        readiness_data: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """
         Generate formatted sleep debt report.
@@ -185,11 +306,12 @@ class SleepDebtTracker:
         Args:
             sleep_data: List of daily sleep records
             lookback_days: Number of days to analyze
+            readiness_data: Optional readiness data for personal sleep need calculation
 
         Returns:
             Formatted markdown report
         """
-        debt_analysis = self.calculate_sleep_debt(sleep_data, lookback_days)
+        debt_analysis = self.calculate_sleep_debt(sleep_data, readiness_data, lookback_days)
 
         if debt_analysis["status"] == "no_data":
             return "⚠️ No sleep data available for debt analysis"
@@ -207,19 +329,35 @@ class SleepDebtTracker:
         result += f"- **Average Daily Deficit:** {debt_analysis['avg_daily_deficit_hours']:.1f} hours\n"
         result += f"- **Days in Debt:** {debt_analysis['days_in_debt']}/{debt_analysis['days_analyzed']}\n"
         result += f"- **Days with Surplus:** {debt_analysis['days_surplus']}/{debt_analysis['days_analyzed']}\n"
-        result += f"- **Optimal Sleep Target:** {self.optimal_sleep / 3600:.1f} hours/night\n\n"
+
+        # Add personalized target info
+        if debt_analysis.get('personal_target_used'):
+            method_labels = {
+                'readiness_correlation': '📈 Readiness Correlation (most accurate)',
+                'sleep_score_correlation': '⭐ Sleep Score Correlation',
+                'duration_percentile': '📊 Duration Percentile (75th)',
+                'fallback_night_owl': '🦉 Night Owl Default',
+                'user_specified': '👤 User-Specified'
+            }
+            method_desc = method_labels.get(debt_analysis['detection_method'], debt_analysis['detection_method'])
+            result += f"- **Personal Sleep Need:** {debt_analysis['optimal_sleep_hours']:.1f} hours/night\n"
+            result += f"  *(Calculated using {method_desc})*\n\n"
+        else:
+            result += f"- **Sleep Target:** {debt_analysis['optimal_sleep_hours']:.1f} hours/night (standard)\n\n"
 
         # Impact Assessment
         result += f"## 🎯 Impact on Performance\n\n"
         result += f"**{severity['impact']}**\n\n"
 
-        if severity['level'] in ['moderate', 'severe', 'critical']:
+        if severity['level'] in ['elevated', 'severe', 'critical']:
             result += "### Potential Effects:\n"
             result += "- 🧠 Reduced cognitive performance and reaction time\n"
             result += "- 😰 Increased stress and emotional reactivity\n"
             result += "- 💪 Decreased physical performance and recovery\n"
-            result += "- 🏥 Weakened immune system\n"
-            result += "- ⚖️ Impaired metabolism and weight regulation\n\n"
+            if severity['level'] in ['severe', 'critical']:
+                result += "- 🏥 Weakened immune system\n"
+                result += "- ⚖️ Impaired metabolism and weight regulation\n"
+            result += "\n"
 
         # Recovery Plan
         result += f"## 🔄 Recovery Plan\n\n"
@@ -238,10 +376,15 @@ class SleepDebtTracker:
                 result += "3. **Weekend Catch-up:** Allow 1 extra hour on weekend nights\n\n"
             elif severity['level'] == 'moderate':
                 result += "1. **Priority Recovery:** Make sleep your #1 priority\n"
+                result += "2. **Add 1 hour:** Go to bed 1 hour earlier consistently\n"
+                result += "3. **Weekend Extension:** Add 1-2 extra hours on weekends\n"
+                result += "4. **Optimize Environment:** Dark, cool bedroom (65-68°F)\n\n"
+            elif severity['level'] == 'elevated':
+                result += "1. **Immediate Priority:** Focus on sleep recovery this week\n"
                 result += "2. **Add 1-2 hours:** Go to bed significantly earlier\n"
-                result += "3. **Weekend Extension:** Add 2 extra hours on weekends\n"
-                result += "4. **Reduce Stress:** Cut non-essential activities\n"
-                result += "5. **Naps OK:** 20-30 minute power naps can help\n\n"
+                result += "3. **Weekend Recovery:** Sleep in as much as needed\n"
+                result += "4. **Reduce Commitments:** Cut non-essential activities\n"
+                result += "5. **Strategic Naps:** 20-30 minute power naps if needed\n\n"
             else:  # severe or critical
                 result += "1. **⚠️ IMMEDIATE ACTION:** Clear your schedule for sleep\n"
                 result += "2. **Add 2-3 hours:** Go to bed much earlier every night\n"

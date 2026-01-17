@@ -643,6 +643,27 @@ class OuraMCPServer:
                 }
             ))
 
+            # Add chronotype analysis tool
+            tools.append(types.Tool(
+                name="analyze_chronotype",
+                description="Analyze chronotype (morning lark, night owl, intermediate) based on sleep timing patterns, sleep quality by bedtime, and activity patterns. Provides personalized recommendations for optimal work hours and exercise timing",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "lookback_days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze (minimum 14, recommended 30+)",
+                            "default": 30
+                        },
+                        "include_activity": {
+                            "type": "boolean",
+                            "description": "Include activity pattern analysis",
+                            "default": True
+                        }
+                    }
+                }
+            ))
+
             return tools
         
         @self.server.call_tool()
@@ -771,6 +792,12 @@ class OuraMCPServer:
                     result = await self._tool_detect_illness_risk(lookback_days)
                     return [types.TextContent(type="text", text=result)]
 
+                elif name == "analyze_chronotype":
+                    lookback_days = arguments.get("lookback_days", 30)
+                    include_activity = arguments.get("include_activity", True)
+                    result = await self._tool_analyze_chronotype(lookback_days, include_activity)
+                    return [types.TextContent(type="text", text=result)]
+
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
@@ -886,6 +913,10 @@ class OuraMCPServer:
     async def _tool_detect_illness_risk(self, lookback_days: int) -> str:
         """Detect illness risk using multi-signal analysis."""
         return await self.intelligence_tools.detect_illness_risk(lookback_days)
+
+    async def _tool_analyze_chronotype(self, lookback_days: int, include_activity: bool) -> str:
+        """Analyze chronotype and provide personalized recommendations."""
+        return await self.intelligence_tools.analyze_chronotype(lookback_days, include_activity)
 
     async def _tool_detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""

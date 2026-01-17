@@ -339,23 +339,31 @@ class IllnessDetector:
         recent_data: List[Dict],
         baselines: Dict
     ) -> Optional[IllnessSignal]:
-        """Check for elevated resting heart rate."""
+        """
+        Check for elevated resting heart rate.
+
+        Note: Uses RHR score from readiness contributors (0-100 scale),
+        not absolute BPM values. Lower score = elevated HR.
+        """
         if 'resting_hr' not in baselines:
             return None
 
         recent_rhrs = []
         for day in recent_data:
             contributors = day.get('contributors', {})
-            rhr = contributors.get('resting_heart_rate')
-            if rhr is not None:
-                recent_rhrs.append(rhr)
+            rhr_score = contributors.get('resting_heart_rate')
+            if rhr_score is not None:
+                recent_rhrs.append(rhr_score)
 
         if not recent_rhrs:
             return None
 
         avg_recent = mean(recent_rhrs)
         baseline = baselines['resting_hr']
-        deviation = avg_recent - baseline
+
+        # For RHR score: LOWER score = elevated HR (inverse relationship)
+        # So we check for score DROP, not increase
+        deviation = baseline - avg_recent  # Inverted: baseline - recent
 
         thresholds = self.THRESHOLDS['resting_hr_increase']
         severity = 0
@@ -374,7 +382,7 @@ class IllnessDetector:
                 value=avg_recent,
                 baseline=baseline,
                 deviation=deviation,
-                message=f"Resting HR {deviation:+.0f}bpm above baseline"
+                message=f"RHR score {deviation:+.0f} points below baseline (elevated HR)"
             )
 
         return None
@@ -643,13 +651,13 @@ class IllnessDetector:
             if 'temperature' in baselines:
                 lines.append(f"- Body Temperature Score: {baselines['temperature']:.0f}/100")
             if 'hrv' in baselines:
-                lines.append(f"- HRV Balance: {baselines['hrv']:.0f}")
+                lines.append(f"- HRV Balance: {baselines['hrv']:.0f}/100")
             if 'resting_hr' in baselines:
-                lines.append(f"- Resting HR: {baselines['resting_hr']:.0f} bpm")
+                lines.append(f"- Resting HR Score: {baselines['resting_hr']:.0f}/100 *(score, not BPM)*")
             if 'respiratory_rate' in baselines:
                 lines.append(f"- Respiratory Rate: {baselines['respiratory_rate']:.1f} br/min")
             if 'recovery_score' in baselines:
-                lines.append(f"- Recovery Score: {baselines['recovery_score']:.0f}")
+                lines.append(f"- Recovery Score: {baselines['recovery_score']:.0f}/100")
             lines.append("")
 
         lines.extend([

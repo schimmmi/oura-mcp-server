@@ -15,7 +15,7 @@ class AnalyticsToolProvider:
 
     def __init__(self, oura_client: OuraClient):
         self.oura_client = oura_client
-        self.sleep_debt_tracker = SleepDebtTracker(optimal_sleep_hours=8.0)
+        self.sleep_debt_tracker = SleepDebtTracker()  # Auto-detect personal sleep need
         self.supplement_correlation = SupplementCorrelation()
 
     async def generate_statistics_report(self, days: int = 30) -> str:
@@ -409,11 +409,14 @@ class AnalyticsToolProvider:
         if not sleep_sessions:
             return "⚠️ No sleep data available for debt analysis"
 
+        # Get readiness data for personal sleep need calculation
+        readiness_data = await self.oura_client.get_daily_readiness(start_date, end_date)
+
         # Aggregate biphasic/multiple sleep sessions per day
         sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions)
 
-        # Generate comprehensive debt report
-        report = self.sleep_debt_tracker.generate_debt_report(sleep_data, days)
+        # Generate comprehensive debt report (includes personal sleep need detection)
+        report = self.sleep_debt_tracker.generate_debt_report(sleep_data, days, readiness_data)
 
         # Add efficiency-based debt analysis
         efficiency_debt = self.sleep_debt_tracker.calculate_sleep_efficiency_debt(sleep_data)

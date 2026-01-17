@@ -71,19 +71,19 @@ class HealthAlert:
 class AlertSystem:
     """Monitors health metrics and generates alerts for critical situations."""
 
-    # Alert thresholds
+    # Base alert thresholds (will be scaled based on personal sleep need)
     THRESHOLDS = {
         'sleep_score': {
             'critical': 60,
             'warning': 70
         },
         'sleep_duration': {
-            'critical': 6.0,  # hours
-            'warning': 7.0
+            'critical': 6.0,  # hours (scaled based on personal need)
+            'warning': 7.0     # (scaled based on personal need)
         },
         'sleep_debt': {
-            'critical': 15.0,  # hours accumulated
-            'warning': 10.0
+            'critical': 15.0,  # hours accumulated (scaled)
+            'warning': 10.0    # (scaled)
         },
         'readiness_score': {
             'critical': 60,
@@ -106,9 +106,40 @@ class AlertSystem:
         }
     }
 
-    def __init__(self):
-        """Initialize the alert system."""
-        pass
+    def __init__(self, personal_sleep_need: Optional[float] = None):
+        """
+        Initialize the alert system.
+
+        Args:
+            personal_sleep_need: Personal sleep need in hours (default: None = use 8h)
+        """
+        self.personal_sleep_need = personal_sleep_need if personal_sleep_need else 8.0
+        self.scale_factor = self.personal_sleep_need / 8.0
+
+        # Scale sleep-related thresholds
+        self.scaled_thresholds = self._scale_thresholds()
+
+    def _scale_thresholds(self) -> Dict:
+        """
+        Scale sleep-related thresholds based on personal sleep need.
+
+        Returns:
+            Dictionary with scaled thresholds
+        """
+        scaled = {}
+
+        for key, value in self.THRESHOLDS.items():
+            if key in ['sleep_duration', 'sleep_debt']:
+                # Scale sleep duration and debt thresholds
+                scaled[key] = {
+                    level: threshold * self.scale_factor
+                    for level, threshold in value.items()
+                }
+            else:
+                # Keep other thresholds unchanged
+                scaled[key] = value.copy()
+
+        return scaled
 
     def check_all_alerts(
         self,
@@ -181,26 +212,26 @@ class AlertSystem:
         latest_score = recent_scores[-1] if recent_scores else 0
 
         # Critical: Latest night very poor
-        if latest_score < self.THRESHOLDS['sleep_score']['critical']:
+        if latest_score < self.scaled_thresholds['sleep_score']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_QUALITY,
                 severity=AlertSeverity.CRITICAL,
                 title="Critical Sleep Quality",
                 message=f"Last night's sleep score was {latest_score}/100 - significantly below healthy range",
                 metric_value=latest_score,
-                threshold=self.THRESHOLDS['sleep_score']['critical'],
+                threshold=self.scaled_thresholds['sleep_score']['critical'],
                 recommendation="Prioritize sleep tonight: go to bed early, optimize environment, avoid alcohol/caffeine"
             ))
 
         # Warning: Average recent sleep poor
-        elif avg_recent_score < self.THRESHOLDS['sleep_score']['warning']:
+        elif avg_recent_score < self.scaled_thresholds['sleep_score']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_QUALITY,
                 severity=AlertSeverity.WARNING,
                 title="Declining Sleep Quality",
                 message=f"Average sleep score over last 3 nights is {avg_recent_score:.0f}/100",
                 metric_value=avg_recent_score,
-                threshold=self.THRESHOLDS['sleep_score']['warning'],
+                threshold=self.scaled_thresholds['sleep_score']['warning'],
                 recommendation="Review sleep hygiene: consistent schedule, cool/dark room, wind-down routine"
             ))
 
@@ -226,26 +257,26 @@ class AlertSystem:
         latest_duration = recent_durations[-1] if recent_durations else 0
 
         # Critical: Severe sleep deprivation
-        if latest_duration < self.THRESHOLDS['sleep_duration']['critical']:
+        if latest_duration < self.scaled_thresholds['sleep_duration']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_DURATION,
                 severity=AlertSeverity.CRITICAL,
                 title="Severe Sleep Deprivation",
                 message=f"Only {latest_duration:.1f}h sleep last night - dangerously low",
                 metric_value=latest_duration,
-                threshold=self.THRESHOLDS['sleep_duration']['critical'],
+                threshold=self.scaled_thresholds['sleep_duration']['critical'],
                 recommendation="Cancel non-essential activities. Aim for 9-10h sleep tonight to recover"
             ))
 
         # Warning: Insufficient sleep
-        elif avg_duration < self.THRESHOLDS['sleep_duration']['warning']:
+        elif avg_duration < self.scaled_thresholds['sleep_duration']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_DURATION,
                 severity=AlertSeverity.WARNING,
                 title="Insufficient Sleep Duration",
                 message=f"Averaging {avg_duration:.1f}h/night over last 3 nights",
                 metric_value=avg_duration,
-                threshold=self.THRESHOLDS['sleep_duration']['warning'],
+                threshold=self.scaled_thresholds['sleep_duration']['warning'],
                 recommendation="Target 8+ hours of sleep. Adjust bedtime earlier by 30-60 minutes"
             ))
 
@@ -276,26 +307,26 @@ class AlertSystem:
                 accumulated_debt = max(0, accumulated_debt + (deficit * 0.5))
 
         # Critical: Severe accumulated debt
-        if accumulated_debt >= self.THRESHOLDS['sleep_debt']['critical']:
+        if accumulated_debt >= self.scaled_thresholds['sleep_debt']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_DEBT,
                 severity=AlertSeverity.CRITICAL,
                 title="Critical Sleep Debt",
                 message=f"Accumulated {accumulated_debt:.1f}h sleep debt over the last week",
                 metric_value=accumulated_debt,
-                threshold=self.THRESHOLDS['sleep_debt']['critical'],
+                threshold=self.scaled_thresholds['sleep_debt']['critical'],
                 recommendation="Immediate recovery needed: add 1-2h extra sleep per night for next week"
             ))
 
         # Warning: Moderate debt
-        elif accumulated_debt >= self.THRESHOLDS['sleep_debt']['warning']:
+        elif accumulated_debt >= self.scaled_thresholds['sleep_debt']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_DEBT,
                 severity=AlertSeverity.WARNING,
                 title="Accumulating Sleep Debt",
                 message=f"Accumulated {accumulated_debt:.1f}h sleep debt",
                 metric_value=accumulated_debt,
-                threshold=self.THRESHOLDS['sleep_debt']['warning'],
+                threshold=self.scaled_thresholds['sleep_debt']['warning'],
                 recommendation="Prevent further debt: prioritize consistent 8h sleep schedule"
             ))
 
@@ -348,45 +379,61 @@ class AlertSystem:
         return alerts
 
     def _check_consecutive_bad_nights(self, sleep_data: List[Dict]) -> List[HealthAlert]:
-        """Check for consecutive bad nights."""
+        """Check for consecutive bad nights (considering both score and duration vs personal need)."""
         alerts = []
 
         if not sleep_data or len(sleep_data) < 3:
             return alerts
 
-        # Count consecutive nights with score < 70
+        # Count consecutive nights that are truly "bad":
+        # Use efficiency as proxy if score not available (aggregated sessions)
         consecutive_bad = 0
         for session in reversed(sleep_data[-7:]):
             if not isinstance(session, dict):
                 continue
 
-            score = session.get('score', 0)
-            if score < 70:
+            # Get score (may be None for aggregated sessions)
+            score = session.get('score')
+            duration_hours = session.get('total_sleep_duration', 0) / 3600
+            deficit = self.personal_sleep_need - duration_hours
+
+            # If no score, use efficiency as proxy
+            if score is None or score == 0:
+                efficiency = session.get('efficiency', 0)
+                # Convert efficiency to score-like metric (efficiency 85% ≈ score 70)
+                score = min(100, efficiency * 1.2) if efficiency else 50
+
+            # "Bad night" criteria:
+            # - Score < 60 (critically low) OR
+            # - (Score < 70 AND duration deficit > 1h significantly below need)
+            is_bad = (score < 60) or (score < 70 and deficit > 1.0)
+
+            if is_bad:
                 consecutive_bad += 1
             else:
                 break
 
         # Critical: 5+ bad nights in a row
-        if consecutive_bad >= self.THRESHOLDS['consecutive_bad_nights']['critical']:
+        if consecutive_bad >= self.scaled_thresholds['consecutive_bad_nights']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_QUALITY,
                 severity=AlertSeverity.CRITICAL,
                 title="Extended Sleep Crisis",
                 message=f"{consecutive_bad} consecutive nights with poor sleep",
                 metric_value=consecutive_bad,
-                threshold=self.THRESHOLDS['consecutive_bad_nights']['critical'],
+                threshold=self.scaled_thresholds['consecutive_bad_nights']['critical'],
                 recommendation="Consider consulting sleep specialist. May indicate underlying issue"
             ))
 
         # Warning: 3+ bad nights
-        elif consecutive_bad >= self.THRESHOLDS['consecutive_bad_nights']['warning']:
+        elif consecutive_bad >= self.scaled_thresholds['consecutive_bad_nights']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.SLEEP_QUALITY,
                 severity=AlertSeverity.WARNING,
                 title="Consecutive Poor Sleep",
                 message=f"{consecutive_bad} nights in a row with suboptimal sleep",
                 metric_value=consecutive_bad,
-                threshold=self.THRESHOLDS['consecutive_bad_nights']['warning'],
+                threshold=self.scaled_thresholds['consecutive_bad_nights']['warning'],
                 recommendation="Break the pattern: review what changed, adjust environment/habits"
             ))
 
@@ -412,26 +459,26 @@ class AlertSystem:
         latest_score = recent_scores[-1] if recent_scores else 0
 
         # Critical: Very low readiness
-        if latest_score < self.THRESHOLDS['readiness_score']['critical']:
+        if latest_score < self.scaled_thresholds['readiness_score']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.RECOVERY,
                 severity=AlertSeverity.CRITICAL,
                 title="Critical Recovery State",
                 message=f"Readiness score is {latest_score}/100 - body needs rest",
                 metric_value=latest_score,
-                threshold=self.THRESHOLDS['readiness_score']['critical'],
+                threshold=self.scaled_thresholds['readiness_score']['critical'],
                 recommendation="Take rest day. No intense training. Focus on sleep and recovery"
             ))
 
         # Warning: Low readiness
-        elif avg_score < self.THRESHOLDS['readiness_score']['warning']:
+        elif avg_score < self.scaled_thresholds['readiness_score']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.RECOVERY,
                 severity=AlertSeverity.WARNING,
                 title="Suboptimal Readiness",
                 message=f"Average readiness {avg_score:.0f}/100 over last 3 days",
                 metric_value=avg_score,
-                threshold=self.THRESHOLDS['readiness_score']['warning'],
+                threshold=self.scaled_thresholds['readiness_score']['warning'],
                 recommendation="Reduce training intensity. Prioritize recovery activities"
             ))
 
@@ -462,26 +509,26 @@ class AlertSystem:
         latest_hrv = hrv_scores[-1] if hrv_scores else 0
 
         # Critical: Very low HRV
-        if latest_hrv < self.THRESHOLDS['hrv_balance']['critical']:
+        if latest_hrv < self.scaled_thresholds['hrv_balance']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.HRV,
                 severity=AlertSeverity.CRITICAL,
                 title="Critical HRV Drop",
                 message=f"HRV balance at {latest_hrv} - indicates high stress or illness",
                 metric_value=latest_hrv,
-                threshold=self.THRESHOLDS['hrv_balance']['critical'],
+                threshold=self.scaled_thresholds['hrv_balance']['critical'],
                 recommendation="Check for illness signs. Avoid intense exercise. Prioritize stress management"
             ))
 
         # Warning: Low HRV
-        elif avg_hrv < self.THRESHOLDS['hrv_balance']['warning']:
+        elif avg_hrv < self.scaled_thresholds['hrv_balance']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.HRV,
                 severity=AlertSeverity.WARNING,
                 title="Declining HRV",
                 message=f"HRV balance averaging {avg_hrv:.0f} - below optimal",
                 metric_value=avg_hrv,
-                threshold=self.THRESHOLDS['hrv_balance']['warning'],
+                threshold=self.scaled_thresholds['hrv_balance']['warning'],
                 recommendation="Monitor stress levels. Consider meditation, breathing exercises, lighter training"
             ))
 
@@ -515,26 +562,26 @@ class AlertSystem:
         increase = recent_rhr - baseline_rhr
 
         # Critical: Significant elevation
-        if increase >= self.THRESHOLDS['resting_hr_increase']['critical']:
+        if increase >= self.scaled_thresholds['resting_hr_increase']['critical']:
             alerts.append(HealthAlert(
                 category=AlertCategory.RESTING_HR,
                 severity=AlertSeverity.CRITICAL,
                 title="Elevated Resting Heart Rate",
                 message=f"Resting HR {increase:.0f}bpm above baseline - possible illness or overtraining",
                 metric_value=recent_rhr,
-                threshold=baseline_rhr + self.THRESHOLDS['resting_hr_increase']['critical'],
+                threshold=baseline_rhr + self.scaled_thresholds['resting_hr_increase']['critical'],
                 recommendation="Check for illness. Rest from training. Monitor temperature. Consult doctor if persists"
             ))
 
         # Warning: Moderate elevation
-        elif increase >= self.THRESHOLDS['resting_hr_increase']['warning']:
+        elif increase >= self.scaled_thresholds['resting_hr_increase']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.RESTING_HR,
                 severity=AlertSeverity.WARNING,
                 title="Rising Resting Heart Rate",
                 message=f"Resting HR {increase:.0f}bpm above baseline",
                 metric_value=recent_rhr,
-                threshold=baseline_rhr + self.THRESHOLDS['resting_hr_increase']['warning'],
+                threshold=baseline_rhr + self.scaled_thresholds['resting_hr_increase']['warning'],
                 recommendation="Reduce training load. Monitor for illness signs. Ensure adequate hydration"
             ))
 
@@ -612,14 +659,14 @@ class AlertSystem:
                 break
 
         # Warning: Extended inactivity
-        if inactive_days >= self.THRESHOLDS['activity_streak']['warning']:
+        if inactive_days >= self.scaled_thresholds['activity_streak']['warning']:
             alerts.append(HealthAlert(
                 category=AlertCategory.ACTIVITY,
                 severity=AlertSeverity.WARNING,
                 title="Prolonged Inactivity",
                 message=f"{inactive_days} consecutive days with minimal activity",
                 metric_value=inactive_days,
-                threshold=self.THRESHOLDS['activity_streak']['warning'],
+                threshold=self.scaled_thresholds['activity_streak']['warning'],
                 recommendation="Break inactivity: take a walk, do light exercise, or active recovery"
             ))
 
