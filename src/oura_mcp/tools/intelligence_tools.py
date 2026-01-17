@@ -8,6 +8,8 @@ from ..api.client import OuraClient
 from ..utils.baselines import BaselineManager
 from ..utils.anomalies import AnomalyDetector
 from ..utils.interpretation import InterpretationEngine
+from ..utils.bedtime_calculator import BedtimeCalculator
+from ..utils.alert_system import AlertSystem
 
 
 class IntelligenceToolProvider:
@@ -24,6 +26,8 @@ class IntelligenceToolProvider:
         self.baseline_manager = baseline_manager
         self.anomaly_detector = anomaly_detector
         self.interpreter = interpreter
+        self.bedtime_calculator = BedtimeCalculator()
+        self.alert_system = AlertSystem()
 
     async def detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""
@@ -331,3 +335,63 @@ class IntelligenceToolProvider:
         result += self.anomaly_detector.format_anomalies_report(anomalies)
 
         return result
+
+    async def calculate_optimal_bedtime(
+        self,
+        days: int = 30,
+        top_percentile: float = 0.25
+    ) -> str:
+        """
+        Calculate optimal bedtime based on historical best nights.
+
+        Args:
+            days: Number of days to analyze (default: 30)
+            top_percentile: Fraction of best nights to analyze (default: 0.25 = top 25%)
+
+        Returns:
+            Formatted bedtime recommendation report
+        """
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # Get sleep sessions
+        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+
+        if not sleep_data:
+            return "⚠️ No sleep data available for analysis"
+
+        # Analyze and generate recommendations
+        analysis = self.bedtime_calculator.analyze_best_nights(
+            sleep_data,
+            top_percentile=top_percentile
+        )
+
+        return self.bedtime_calculator.generate_recommendation_report(analysis)
+
+    async def check_health_alerts(self, lookback_days: int = 7) -> str:
+        """
+        Check all health metrics and generate alerts for critical situations.
+
+        Args:
+            lookback_days: Number of days to analyze (default: 7)
+
+        Returns:
+            Formatted health alerts report
+        """
+        end_date = date.today()
+        start_date = end_date - timedelta(days=lookback_days)
+
+        # Get recent data
+        sleep_data = await self.oura_client.get_sleep(start_date, end_date)
+        readiness_data = await self.oura_client.get_daily_readiness(start_date, end_date)
+        activity_data = await self.oura_client.get_daily_activity(start_date, end_date)
+
+        # Check for alerts
+        alerts = self.alert_system.check_all_alerts(
+            sleep_data,
+            readiness_data,
+            activity_data,
+            lookback_days
+        )
+
+        return self.alert_system.format_alerts_report(alerts)

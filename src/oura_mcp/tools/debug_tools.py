@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from typing import Any, Dict
 
 from ..api.client import OuraClient
+from ..utils.weekly_report import WeeklyReportGenerator
 
 
 class DebugToolProvider:
@@ -12,6 +13,7 @@ class DebugToolProvider:
 
     def __init__(self, oura_client: OuraClient):
         self.oura_client = oura_client
+        self.weekly_report_generator = WeeklyReportGenerator()
 
     async def generate_daily_brief(self) -> str:
         """Generate daily health brief."""
@@ -112,3 +114,64 @@ class DebugToolProvider:
             result += f"```json\n{json.dumps(record, indent=2)}\n```\n\n"
 
         return result
+
+    async def generate_weekly_report(
+        self,
+        weeks_ago: int = 0,
+        include_previous_week: bool = True
+    ) -> str:
+        """
+        Generate comprehensive weekly health report.
+
+        Args:
+            weeks_ago: Number of weeks ago to report (0 = current week, 1 = last week, etc.)
+            include_previous_week: Include week-over-week comparison
+
+        Returns:
+            Formatted weekly report
+        """
+        # Calculate date range
+        today = date.today()
+        days_since_monday = today.weekday()  # Monday = 0
+
+        # Calculate start and end of target week
+        week_start = today - timedelta(days=days_since_monday) - timedelta(weeks=weeks_ago)
+        week_end = week_start + timedelta(days=6)
+
+        # Get data for the week
+        sleep_data = await self.oura_client.get_sleep(week_start, week_end)
+        readiness_data = await self.oura_client.get_daily_readiness(week_start, week_end)
+        activity_data = await self.oura_client.get_daily_activity(week_start, week_end)
+
+        # Get previous week data if requested
+        previous_week_data = None
+        if include_previous_week:
+            prev_week_start = week_start - timedelta(days=7)
+            prev_week_end = prev_week_start + timedelta(days=6)
+
+            prev_sleep = await self.oura_client.get_sleep(prev_week_start, prev_week_end)
+            prev_readiness = await self.oura_client.get_daily_readiness(prev_week_start, prev_week_end)
+            prev_activity = await self.oura_client.get_daily_activity(prev_week_start, prev_week_end)
+
+            # Analyze previous week
+            prev_sleep_metrics = self.weekly_report_generator._analyze_sleep_metrics(prev_sleep)
+            prev_readiness_metrics = self.weekly_report_generator._analyze_readiness_metrics(prev_readiness)
+            prev_activity_metrics = self.weekly_report_generator._analyze_activity_metrics(prev_activity)
+
+            previous_week_data = {
+                'sleep': prev_sleep_metrics,
+                'readiness': prev_readiness_metrics,
+                'activity': prev_activity_metrics
+            }
+
+        # Generate report
+        report = self.weekly_report_generator.generate_weekly_report(
+            sleep_data,
+            readiness_data,
+            activity_data,
+            week_start,
+            week_end,
+            previous_week_data
+        )
+
+        return self.weekly_report_generator.format_weekly_report(report)

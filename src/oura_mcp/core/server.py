@@ -20,6 +20,8 @@ from ..resources.metrics_resources import MetricsResourceProvider
 from ..tools.data_tools import DataToolProvider
 from ..tools.intelligence_tools import IntelligenceToolProvider
 from ..tools.debug_tools import DebugToolProvider
+from ..tools.analytics_tools import AnalyticsToolProvider
+from ..tools.prediction_tools import PredictionToolProvider
 
 
 logger = get_logger(__name__)
@@ -63,6 +65,8 @@ class OuraMCPServer:
         self.data_tools = None
         self.intelligence_tools = None
         self.debug_tools = None
+        self.analytics_tools = None
+        self.prediction_tools = None
 
         # Register handlers
         self._register_resources()
@@ -94,6 +98,8 @@ class OuraMCPServer:
             self.interpreter
         )
         self.debug_tools = DebugToolProvider(self.oura_client)
+        self.analytics_tools = AnalyticsToolProvider(self.oura_client)
+        self.prediction_tools = PredictionToolProvider(self.oura_client)
 
         return self
     
@@ -255,6 +261,27 @@ class OuraMCPServer:
                         "properties": {},
                     }
                 ))
+
+            # Add weekly report tool
+            tools.append(types.Tool(
+                name="generate_weekly_report",
+                description="Generate comprehensive weekly health report with trends, highlights, and recommendations",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "weeks_ago": {
+                            "type": "integer",
+                            "description": "Number of weeks ago to report (0 = current week, 1 = last week)",
+                            "default": 0
+                        },
+                        "include_previous_week": {
+                            "type": "boolean",
+                            "description": "Include week-over-week comparison",
+                            "default": True
+                        }
+                    }
+                }
+            ))
 
             if "analyze_sleep_trend" in self.config.mcp.tools.enabled:
                 tools.append(types.Tool(
@@ -474,6 +501,132 @@ class OuraMCPServer:
                 }
             ))
 
+            # Add analytics tool
+            tools.append(types.Tool(
+                name="generate_statistics_report",
+                description="Generate comprehensive statistical analysis of health data with trends, patterns, and insights",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze",
+                            "default": 30
+                        }
+                    }
+                }
+            ))
+
+            # Add prediction tools
+            tools.append(types.Tool(
+                name="predict_sleep_quality",
+                description="Predict sleep quality for upcoming days using multiple forecasting methods (trend, moving average, weekly patterns)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days_ahead": {
+                            "type": "integer",
+                            "description": "Number of days to predict",
+                            "default": 3
+                        }
+                    }
+                }
+            ))
+
+            tools.append(types.Tool(
+                name="predict_readiness",
+                description="Forecast readiness scores and training recommendations for upcoming days",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days_ahead": {
+                            "type": "integer",
+                            "description": "Number of days to predict",
+                            "default": 3
+                        }
+                    }
+                }
+            ))
+
+            # Add sleep debt tool
+            tools.append(types.Tool(
+                name="analyze_sleep_debt",
+                description="Calculate accumulated sleep debt over time with severity assessment and recovery recommendations",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze",
+                            "default": 30
+                        }
+                    }
+                }
+            ))
+
+            # Add optimal bedtime calculator tool
+            tools.append(types.Tool(
+                name="calculate_optimal_bedtime",
+                description="Calculate optimal bedtime based on analysis of your best sleep nights",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze",
+                            "default": 30
+                        },
+                        "top_percentile": {
+                            "type": "number",
+                            "description": "Fraction of best nights to analyze (e.g., 0.25 = top 25%)",
+                            "default": 0.25
+                        }
+                    }
+                }
+            ))
+
+            # Add supplement correlation tool
+            tools.append(types.Tool(
+                name="analyze_supplement_correlation",
+                description="Analyze correlation between tags (supplements, interventions) and sleep/health metrics to identify what works",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze",
+                            "default": 60
+                        },
+                        "min_occurrences": {
+                            "type": "integer",
+                            "description": "Minimum number of tag occurrences to analyze",
+                            "default": 3
+                        },
+                        "top_n": {
+                            "type": "integer",
+                            "description": "Number of top results to show in detail",
+                            "default": 10
+                        }
+                    }
+                }
+            ))
+
+            # Add health alerts tool
+            tools.append(types.Tool(
+                name="check_health_alerts",
+                description="Check for critical health alerts and warnings based on recent metrics and trends",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "lookback_days": {
+                            "type": "integer",
+                            "description": "Number of days to analyze for alerts",
+                            "default": 7
+                        }
+                    }
+                }
+            ))
+
             return tools
         
         @self.server.call_tool()
@@ -484,6 +637,12 @@ class OuraMCPServer:
             try:
                 if name == "generate_daily_brief":
                     result = await self._tool_generate_daily_brief()
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "generate_weekly_report":
+                    weeks_ago = arguments.get("weeks_ago", 0)
+                    include_previous_week = arguments.get("include_previous_week", True)
+                    result = await self._tool_generate_weekly_report(weeks_ago, include_previous_week)
                     return [types.TextContent(type="text", text=result)]
 
                 elif name == "analyze_sleep_trend":
@@ -553,6 +712,44 @@ class OuraMCPServer:
                     result = await self._tool_get_tags(days)
                     return [types.TextContent(type="text", text=result)]
 
+                elif name == "generate_statistics_report":
+                    days = arguments.get("days", 30)
+                    result = await self._tool_generate_statistics_report(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "predict_sleep_quality":
+                    days_ahead = arguments.get("days_ahead", 3)
+                    result = await self._tool_predict_sleep_quality(days_ahead)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "predict_readiness":
+                    days_ahead = arguments.get("days_ahead", 3)
+                    result = await self._tool_predict_readiness(days_ahead)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "analyze_sleep_debt":
+                    days = arguments.get("days", 30)
+                    result = await self._tool_analyze_sleep_debt(days)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "calculate_optimal_bedtime":
+                    days = arguments.get("days", 30)
+                    top_percentile = arguments.get("top_percentile", 0.25)
+                    result = await self._tool_calculate_optimal_bedtime(days, top_percentile)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "analyze_supplement_correlation":
+                    days = arguments.get("days", 60)
+                    min_occurrences = arguments.get("min_occurrences", 3)
+                    top_n = arguments.get("top_n", 10)
+                    result = await self._tool_analyze_supplement_correlation(days, min_occurrences, top_n)
+                    return [types.TextContent(type="text", text=result)]
+
+                elif name == "check_health_alerts":
+                    lookback_days = arguments.get("lookback_days", 7)
+                    result = await self._tool_check_health_alerts(lookback_days)
+                    return [types.TextContent(type="text", text=result)]
+
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
@@ -597,6 +794,10 @@ class OuraMCPServer:
         """Generate daily health brief."""
         return await self.debug_tools.generate_daily_brief()
 
+    async def _tool_generate_weekly_report(self, weeks_ago: int, include_previous_week: bool) -> str:
+        """Generate weekly health report."""
+        return await self.debug_tools.generate_weekly_report(weeks_ago, include_previous_week)
+
     async def _tool_analyze_sleep_trend(self, days: int) -> str:
         """Analyze sleep trend."""
         return await self.debug_tools.analyze_sleep_trend(days)
@@ -632,6 +833,34 @@ class OuraMCPServer:
     async def _tool_get_tags(self, days: int) -> str:
         """Get user-created tags."""
         return await self.data_tools.get_tags(days)
+
+    async def _tool_generate_statistics_report(self, days: int) -> str:
+        """Generate comprehensive statistics report."""
+        return await self.analytics_tools.generate_statistics_report(days)
+
+    async def _tool_predict_sleep_quality(self, days_ahead: int) -> str:
+        """Predict sleep quality for upcoming days."""
+        return await self.prediction_tools.predict_sleep_quality(days_ahead)
+
+    async def _tool_predict_readiness(self, days_ahead: int) -> str:
+        """Predict readiness for upcoming days."""
+        return await self.prediction_tools.predict_readiness(days_ahead)
+
+    async def _tool_analyze_sleep_debt(self, days: int) -> str:
+        """Analyze accumulated sleep debt."""
+        return await self.analytics_tools.analyze_sleep_debt(days)
+
+    async def _tool_calculate_optimal_bedtime(self, days: int, top_percentile: float) -> str:
+        """Calculate optimal bedtime based on best nights."""
+        return await self.intelligence_tools.calculate_optimal_bedtime(days, top_percentile)
+
+    async def _tool_analyze_supplement_correlation(self, days: int, min_occurrences: int, top_n: int) -> str:
+        """Analyze supplement/tag correlation with health metrics."""
+        return await self.analytics_tools.analyze_supplement_correlation(days, min_occurrences, top_n)
+
+    async def _tool_check_health_alerts(self, lookback_days: int) -> str:
+        """Check for critical health alerts and warnings."""
+        return await self.intelligence_tools.check_health_alerts(lookback_days)
 
     async def _tool_detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""
