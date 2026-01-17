@@ -627,6 +627,22 @@ class OuraMCPServer:
                 }
             ))
 
+            # Add illness detection tool
+            tools.append(types.Tool(
+                name="detect_illness_risk",
+                description="Early illness detection using multi-signal analysis (temperature, HRV, resting HR, respiratory rate). Provides 1-2 day advance warning",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "lookback_days": {
+                            "type": "integer",
+                            "description": "Number of days for baseline calculation",
+                            "default": 30
+                        }
+                    }
+                }
+            ))
+
             return tools
         
         @self.server.call_tool()
@@ -750,6 +766,11 @@ class OuraMCPServer:
                     result = await self._tool_check_health_alerts(lookback_days)
                     return [types.TextContent(type="text", text=result)]
 
+                elif name == "detect_illness_risk":
+                    lookback_days = arguments.get("lookback_days", 30)
+                    result = await self._tool_detect_illness_risk(lookback_days)
+                    return [types.TextContent(type="text", text=result)]
+
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
@@ -861,6 +882,10 @@ class OuraMCPServer:
     async def _tool_check_health_alerts(self, lookback_days: int) -> str:
         """Check for critical health alerts and warnings."""
         return await self.intelligence_tools.check_health_alerts(lookback_days)
+
+    async def _tool_detect_illness_risk(self, lookback_days: int) -> str:
+        """Detect illness risk using multi-signal analysis."""
+        return await self.intelligence_tools.detect_illness_risk(lookback_days)
 
     async def _tool_detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""

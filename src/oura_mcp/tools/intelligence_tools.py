@@ -11,6 +11,7 @@ from ..utils.interpretation import InterpretationEngine
 from ..utils.bedtime_calculator import BedtimeCalculator
 from ..utils.alert_system import AlertSystem
 from ..utils.sleep_aggregation import aggregate_sleep_sessions_by_day
+from ..utils.illness_detection import IllnessDetector
 
 
 class IntelligenceToolProvider:
@@ -29,6 +30,7 @@ class IntelligenceToolProvider:
         self.interpreter = interpreter
         self.bedtime_calculator = BedtimeCalculator()
         self.alert_system = AlertSystem()
+        self.illness_detector = IllnessDetector(baseline_days=30)
 
     async def detect_recovery_status(self) -> str:
         """Detect current recovery status based on multiple signals."""
@@ -402,3 +404,37 @@ class IntelligenceToolProvider:
         )
 
         return self.alert_system.format_alerts_report(alerts)
+
+    async def detect_illness_risk(self, lookback_days: int = 30) -> str:
+        """
+        Detect potential illness using multi-signal analysis.
+
+        Combines body temperature, HRV, resting HR, respiratory rate,
+        and recovery scores to provide early warning 1-2 days before symptoms.
+
+        Args:
+            lookback_days: Number of days for baseline calculation (default: 30)
+
+        Returns:
+            Formatted illness detection report
+        """
+        end_date = date.today()
+        start_date = end_date - timedelta(days=lookback_days)
+
+        # Get data for analysis
+        readiness_data = await self.oura_client.get_daily_readiness(start_date, end_date)
+        sleep_sessions = await self.oura_client.get_sleep(start_date, end_date)
+
+        if not readiness_data or len(readiness_data) < 7:
+            return "⚠️ Insufficient data for illness detection (need at least 7 days of readiness data)"
+
+        # Aggregate sleep sessions
+        sleep_data = aggregate_sleep_sessions_by_day(sleep_sessions) if sleep_sessions else []
+
+        # Detect illness signals
+        detection = self.illness_detector.detect_illness_signals(
+            readiness_data,
+            sleep_data
+        )
+
+        return self.illness_detector.format_illness_report(detection)
