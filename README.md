@@ -4,9 +4,16 @@ A Model Context Protocol (MCP) server that provides AI assistants with structure
 
 ## Features
 
+### 🍽️ Nutrition Intelligence (v0.6.0) ✅
+- **Calorie Needs Prediction**: 7-day TDEE forecasts based on activity patterns (NEW in v0.6.0)
+- **Flexible Macro Planning**: Choose from 9 nutrition styles OR set custom carb limits (NEW in v0.6.0)
+- **BMR & TDEE Calculation**: Mifflin-St Jeor formula with Oura activity integration (NEW in v0.6.0)
+- **Weekly Pattern Analysis**: Day-of-week calorie expenditure patterns (NEW in v0.6.0)
+- **Personalized Recommendations**: Protein/carb/fat targets based on your approach (NEW in v0.6.0)
+
 ### 🧠 Health Intelligence (v0.5.0) ✅
-- **Chronotype Analysis**: MSF-based classification (Night Owl, Morning Lark) with personalized recommendations (NEW in v0.5.0)
-- **Personalized Sleep Need**: Auto-detection via readiness correlation - no more one-size-fits-all 8h target (NEW in v0.5.0)
+- **Chronotype Analysis**: MSF-based classification (Night Owl, Morning Lark) with personalized recommendations
+- **Personalized Sleep Need**: Auto-detection via readiness correlation - no more one-size-fits-all 8h target
 - **Analytics**: Comprehensive statistical reports with correlations and trend detection
 - **Predictions**: 7-day forecasts for sleep, readiness, and activity with ensemble learning
 - **Sleep Optimization**: Optimal bedtime calculator and personalized sleep debt tracking
@@ -163,7 +170,13 @@ Add to your Claude config (`~/Library/Application Support/Claude/claude_desktop_
 - "What's my VO2 Max?"
 - "Show me the tags I created this week"
 
-**Chronotype & Sleep Optimization (NEW in v0.5.0):**
+**Nutrition & Calorie Planning (NEW in v0.6.0):**
+- "Predict my calorie needs for the next 7 days with max 30g carbs"
+- "Show me my TDEE forecast with keto macros"
+- "What's my calorie expenditure prediction with carnivore diet?"
+- "Calculate my macro targets for next week with 50g carb limit"
+
+**Chronotype & Sleep Optimization:**
 - "What's my chronotype based on my sleep patterns?"
 - "Calculate my personal sleep need using my readiness data"
 - "What's my sleep debt and how long will recovery take?"
@@ -174,7 +187,7 @@ Add to your Claude config (`~/Library/Application Support/Claude/claude_desktop_
 - "Does my magnesium supplement improve my sleep quality?"
 - "Show me a comprehensive weekly health report"
 
-**Predictions & Intelligence (NEW in v0.4.0):**
+**Predictions & Intelligence:**
 - "Predict my sleep quality for the next 7 days"
 - "Forecast my readiness and activity scores for this week"
 - "Am I at risk of getting sick? Check for early warning signs"
@@ -211,7 +224,8 @@ ruff check src/
 
 ## Documentation
 
-- **[v0.5.0 Release Notes](releases/v0.5.0_RELEASE_NOTES.md)** - Personalized health insights (NEW)
+- **[v0.6.0 Release Notes](releases/v0.6.0_RELEASE_NOTES.md)** - Nutrition intelligence & calorie forecasting (NEW)
+- **[v0.5.0 Release Notes](releases/v0.5.0_RELEASE_NOTES.md)** - Personalized health insights
 - **[v0.4.0 Release Notes](releases/v0.4.0_RELEASE_NOTES.md)** - Complete v0.4.0 documentation
 - **[Phase 2 Quick Start Guide](docs/PHASE2_QUICKSTART.md)** - User guide for intelligence features
 - **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete Phase 2 documentation
@@ -235,6 +249,7 @@ ruff check src/
 - [x] **v0.3.1**: Code refactoring & modular architecture ✅ **2026-01-17**
 - [x] **v0.4.0**: Health intelligence platform (analytics, predictions, illness detection) ✅ **2026-01-17**
 - [x] **v0.5.0**: Personalized health insights (chronotype, adaptive thresholds) ✅ **2026-01-17**
+- [x] **v0.6.0**: Nutrition intelligence & calorie forecasting ✅ **2026-01-18**
 
 ## License
 

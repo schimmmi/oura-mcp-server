@@ -548,6 +548,31 @@ class OuraMCPServer:
                 }
             ))
 
+            tools.append(types.Tool(
+                name="predict_calorie_needs",
+                description="Predict daily calorie needs (TDEE) for upcoming days based on activity patterns, with personalized macro recommendations. You can either use a predefined nutrition style OR specify a custom max carbs limit.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "days_ahead": {
+                            "type": "integer",
+                            "description": "Number of days to predict",
+                            "default": 7
+                        },
+                        "nutrition_style": {
+                            "type": "string",
+                            "description": "Nutrition approach for macro recommendations (ignored if max_carbs_g is set)",
+                            "enum": ["balanced", "keto", "low_carb", "carnivore", "paleo", "high_protein", "athlete", "mediterranean", "zone"],
+                            "default": "balanced"
+                        },
+                        "max_carbs_g": {
+                            "type": "integer",
+                            "description": "Maximum carbs in grams per day (overrides nutrition_style if provided). Example: 30 for very low carb, 50 for keto, 100 for low carb"
+                        }
+                    }
+                }
+            ))
+
             # Add sleep debt tool
             tools.append(types.Tool(
                 name="analyze_sleep_debt",
@@ -764,6 +789,13 @@ class OuraMCPServer:
                     result = await self._tool_predict_readiness(days_ahead)
                     return [types.TextContent(type="text", text=result)]
 
+                elif name == "predict_calorie_needs":
+                    days_ahead = arguments.get("days_ahead", 7)
+                    nutrition_style = arguments.get("nutrition_style", "balanced")
+                    max_carbs_g = arguments.get("max_carbs_g")
+                    result = await self._tool_predict_calorie_needs(days_ahead, nutrition_style, max_carbs_g)
+                    return [types.TextContent(type="text", text=result)]
+
                 elif name == "analyze_sleep_debt":
                     days = arguments.get("days", 30)
                     result = await self._tool_analyze_sleep_debt(days)
@@ -893,6 +925,15 @@ class OuraMCPServer:
     async def _tool_predict_readiness(self, days_ahead: int) -> str:
         """Predict readiness for upcoming days."""
         return await self.prediction_tools.predict_readiness(days_ahead)
+
+    async def _tool_predict_calorie_needs(
+        self,
+        days_ahead: int,
+        nutrition_style: str = "balanced",
+        max_carbs_g: Optional[int] = None
+    ) -> str:
+        """Predict daily calorie needs for upcoming days."""
+        return await self.prediction_tools.predict_calorie_needs(days_ahead, nutrition_style, max_carbs_g)
 
     async def _tool_analyze_sleep_debt(self, days: int) -> str:
         """Analyze accumulated sleep debt."""

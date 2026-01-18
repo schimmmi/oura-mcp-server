@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Tuple, Optional
 
 from ..api.client import OuraClient
+from ..utils.calorie_forecast import CalorieForecaster
 
 
 class PredictionToolProvider:
@@ -339,3 +340,239 @@ class PredictionToolProvider:
             return "⚠️ Light training recommended"
         else:
             return "🔴 Focus on recovery, avoid intense training"
+
+    async def predict_calorie_needs(
+        self,
+        days_ahead: int = 7,
+        nutrition_style: str = 'balanced',
+        max_carbs_g: Optional[int] = None
+    ) -> str:
+        """
+        Predict daily calorie needs for upcoming days based on activity patterns.
+
+        Args:
+            days_ahead: Number of days to predict (default: 7)
+            nutrition_style: Nutrition approach for macro recommendations (default: 'balanced')
+                Options: balanced, keto, low_carb, carnivore, paleo, high_protein,
+                        athlete, mediterranean, zone
+            max_carbs_g: Maximum carbs in grams per day (overrides nutrition_style if provided)
+
+        Returns:
+            Formatted calorie needs prediction report
+        """
+        # Gather historical activity data (last 30 days)
+        end_date = date.today()
+        start_date = end_date - timedelta(days=30)
+
+        activity_data = await self.oura_client.get_daily_activity(start_date, end_date)
+
+        if not activity_data or len(activity_data) < 7:
+            return "⚠️ Insufficient activity data for prediction (need at least 7 days)"
+
+        # Get personal information
+        try:
+            personal_info_response = await self.oura_client.get_personal_info()
+            personal_info = {
+                'weight': personal_info_response.get('weight', 70),
+                'height': personal_info_response.get('height', 170),
+                'age': personal_info_response.get('age', 30),
+                'biological_sex': personal_info_response.get('biological_sex', 'male')
+            }
+        except Exception:
+            # Use defaults if personal info not available
+            personal_info = {
+                'weight': 70,
+                'height': 170,
+                'age': 30,
+                'biological_sex': 'male'
+            }
+
+        # Validate nutrition style
+        if max_carbs_g is None and nutrition_style not in CalorieForecaster.NUTRITION_STYLES:
+            available_styles = ', '.join(CalorieForecaster.NUTRITION_STYLES.keys())
+            return f"⚠️ Invalid nutrition style '{nutrition_style}'. Available options: {available_styles}"
+
+        result = f"# 🍽️ Calorie Needs Prediction ({days_ahead} days)\n\n"
+        result += f"**Based on:** Last {len(activity_data)} days of activity data\n"
+        result += f"**Prediction Date:** {date.today().isoformat()}\n"
+
+        if max_carbs_g is not None:
+            result += f"**Macro Strategy:** Custom (Max {max_carbs_g}g carbs/day)\n\n"
+        else:
+            style_info = CalorieForecaster.NUTRITION_STYLES[nutrition_style]
+            result += f"**Nutrition Style:** {style_info['name']} - {style_info['description']}\n\n"
+
+        # Calculate trends
+        trends = CalorieForecaster.analyze_calorie_trends(activity_data, personal_info)
+
+        result += "## 📊 Your Baseline Metrics\n\n"
+        result += f"**Basal Metabolic Rate (BMR):** {trends.get('bmr', 0):,} cal/day\n"
+        result += f"**Average TDEE (last 30 days):** {trends.get('average_tdee', 0):,} cal/day\n"
+        result += f"**Range:** {trends.get('min_tdee', 0):,} - {trends.get('max_tdee', 0):,} cal/day\n"
+        result += f"**Variability:** ±{trends.get('variability', 0):,.0f} calories\n\n"
+
+        # Trend analysis
+        trend_direction = trends.get('trend_direction', 'stable')
+        if trend_direction == 'increasing':
+            result += f"📈 **Trend:** Your calorie expenditure is increasing (+{trends.get('trend_change', 0):,.0f} cal/day)\n\n"
+        elif trend_direction == 'decreasing':
+            result += f"📉 **Trend:** Your calorie expenditure is decreasing (-{trends.get('trend_change', 0):,.0f} cal/day)\n\n"
+        else:
+            result += "➡️ **Trend:** Your calorie expenditure is stable\n\n"
+
+        # Generate forecasts
+        forecasts = CalorieForecaster.forecast_calorie_needs(
+            activity_data,
+            personal_info,
+            days_ahead
+        )
+
+        if not forecasts:
+            return result + "\n⚠️ Unable to generate forecasts"
+
+        result += "## 🔮 Daily Calorie Needs Forecast\n\n"
+
+        weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        for forecast in forecasts:
+            forecast_date = date.fromisoformat(forecast['date'])
+            weekday = weekday_names[forecast_date.weekday()]
+
+            result += f"### {weekday}, {forecast_date.strftime('%B %d')}\n"
+            result += f"**Predicted TDEE:** {forecast['predicted_calories']:,} calories {self._get_calorie_emoji(forecast['predicted_calories'])}\n"
+            result += f"**Activity Level:** {forecast['activity_level'].replace('_', ' ').title()}\n"
+            result += f"**Confidence:** {self._get_confidence_emoji(forecast['confidence'])} {forecast['confidence'].title()}\n"
+
+            # Nutrition recommendations
+            result += self._get_nutrition_recommendation(forecast['predicted_calories'], nutrition_style, max_carbs_g)
+            result += "\n"
+
+        # Add insights
+        result += self._generate_calorie_insights(forecasts, trends)
+
+        return result
+
+    def _get_calorie_emoji(self, calories: int) -> str:
+        """Get emoji for calorie level."""
+        if calories >= 3000:
+            return "🔥"
+        elif calories >= 2500:
+            return "💪"
+        elif calories >= 2000:
+            return "✅"
+        else:
+            return "🟢"
+
+    def _get_confidence_emoji(self, confidence: str) -> str:
+        """Get emoji for confidence level."""
+        if confidence == 'high':
+            return "🟢"
+        elif confidence == 'medium':
+            return "🟡"
+        else:
+            return "🔴"
+
+    def _get_nutrition_recommendation(
+        self,
+        calories: int,
+        nutrition_style: str,
+        max_carbs_g: Optional[int] = None
+    ) -> str:
+        """Get nutrition recommendations based on calorie needs and nutrition style."""
+        result = "**Macro Targets:**\n"
+
+        # Use max_carbs if provided, otherwise use nutrition style
+        if max_carbs_g is not None:
+            macros = CalorieForecaster.calculate_macros_with_max_carbs(calories, max_carbs_g)
+            protein_g = macros['protein_g']
+            protein_pct = macros['protein_pct']
+            carb_g = macros['carb_g']
+            carb_pct = macros['carb_pct']
+            fat_g = macros['fat_g']
+            fat_pct = macros['fat_pct']
+
+            result += f"  - Protein: {protein_g}g ({protein_pct}%)\n"
+            result += f"  - Carbs: {carb_g}g ({carb_pct}%)"
+            if macros['carb_limited']:
+                result += " ⚠️ at limit\n"
+            else:
+                result += "\n"
+            result += f"  - Fat: {fat_g}g ({fat_pct}%)\n"
+        else:
+            # Get macro percentages from nutrition style
+            style = CalorieForecaster.NUTRITION_STYLES.get(nutrition_style, CalorieForecaster.NUTRITION_STYLES['balanced'])
+            protein_pct = style['protein_pct']
+            carb_pct = style['carb_pct']
+            fat_pct = style['fat_pct']
+
+            protein_cal = int(calories * protein_pct / 100)
+            carb_cal = int(calories * carb_pct / 100)
+            fat_cal = int(calories * fat_pct / 100)
+
+            protein_g = int(protein_cal / 4)  # 4 cal/g
+            carb_g = int(carb_cal / 4)  # 4 cal/g
+            fat_g = int(fat_cal / 9)  # 9 cal/g
+
+            result += f"  - Protein: {protein_g}g ({protein_pct}%)\n"
+
+            if carb_pct > 0:
+                result += f"  - Carbs: {carb_g}g ({carb_pct}%)\n"
+            else:
+                result += f"  - Carbs: <10g (minimal/trace)\n"
+
+            result += f"  - Fat: {fat_g}g ({fat_pct}%)\n"
+
+        return result
+
+    def _generate_calorie_insights(
+        self,
+        forecasts: List[Dict[str, Any]],
+        trends: Dict[str, Any]
+    ) -> str:
+        """Generate insights from calorie predictions."""
+        result = "## 💡 Insights & Recommendations\n\n"
+
+        # Calculate average predicted calories
+        avg_predicted = statistics.mean([f['predicted_calories'] for f in forecasts])
+        current_avg = trends.get('average_tdee', 0)
+
+        if avg_predicted > current_avg + 100:
+            result += "### 📈 Increased Energy Needs Expected\n"
+            result += f"Your calorie needs are predicted to increase by ~{int(avg_predicted - current_avg)} cal/day.\n"
+            result += "**Action:** Consider increasing food intake to support higher activity levels.\n\n"
+        elif avg_predicted < current_avg - 100:
+            result += "### 📉 Decreased Energy Needs Expected\n"
+            result += f"Your calorie needs may decrease by ~{int(current_avg - avg_predicted)} cal/day.\n"
+            result += "**Action:** Adjust portions to avoid excess calorie intake.\n\n"
+        else:
+            result += "### ➡️ Stable Energy Needs\n"
+            result += "Your calorie needs are expected to remain consistent.\n"
+            result += "**Action:** Maintain your current nutrition plan.\n\n"
+
+        # Variability insights
+        predicted_calories = [f['predicted_calories'] for f in forecasts]
+        variability = max(predicted_calories) - min(predicted_calories)
+
+        if variability > 300:
+            result += "### ⚠️ High Day-to-Day Variation\n"
+            result += f"Your calorie needs vary by up to {variability} cal/day.\n"
+            result += "**Tip:** Adjust your intake based on daily activity levels, or maintain a consistent average.\n\n"
+
+        # Weekly pattern insight
+        weekday_cals = [f['predicted_calories'] for f in forecasts[:5]] if len(forecasts) >= 5 else []
+        weekend_cals = [f['predicted_calories'] for f in forecasts[5:7]] if len(forecasts) >= 7 else []
+
+        if weekday_cals and weekend_cals:
+            weekday_avg = statistics.mean(weekday_cals)
+            weekend_avg = statistics.mean(weekend_cals)
+
+            if weekend_avg > weekday_avg + 150:
+                result += f"### 🏃 More Active Weekends\n"
+                result += f"You burn ~{int(weekend_avg - weekday_avg)} more calories on weekends.\n"
+                result += "**Tip:** Fuel your weekend activities with adequate nutrition.\n\n"
+            elif weekday_avg > weekend_avg + 150:
+                result += f"### 💼 More Active Weekdays\n"
+                result += f"You burn ~{int(weekday_avg - weekend_avg)} more calories during the week.\n"
+                result += "**Tip:** Consider lighter meals on weekends to match lower activity.\n\n"
+
+        return result
